@@ -19,8 +19,8 @@ values, and "expected" numbers are never recorded as results.
   clear line of sight) for 5 GHz runs; record client hardware and position per
   run.
 - **RF environment**: not controlled. Record channel, width, regdomain
-  country, and a scan snapshot (`iwinfo wlan1 scan`) alongside every Wi-Fi
-  result; repeat runs and report medians.
+  country, and a scan snapshot (`iwinfo <5GHz-radio> scan`) alongside every
+  Wi-Fi result; repeat runs and report medians.
 - **Router side**: SSH session for counters. Baseline snapshot before each
   scenario: `free -m`, `cat /proc/interrupts`, `cat /proc/softirqs`,
   `ethtool -S <wan>`, `conntrack -S`.
@@ -140,14 +140,16 @@ candidate to default ([performance.md](performance.md)).
 
 ### Wi-Fi error/retry capture
 
-During the 5 GHz scenario, snapshot `iw dev wlan0 station dump` /
-`iw dev wlan1 station dump` (retries, signal, tx bitrate) and `ethtool -S` on
-the Ethernet side, before and after each run.
+During the 5 GHz scenario, snapshot `iw dev <phy> station dump` (retries,
+signal, tx bitrate) and `ethtool -S` on the Ethernet side, before and after
+each run. Interface-to-band mapping is **not** asserted here: the DTS wires
+pcie0 = MT7615 (5 GHz) and pcie1 = MT7603 (2.4 GHz), but wlan0/wlan1 naming
+follows probe order — identify with `iwinfo` at test time.
 
 | Radio | Retries baseline | Retries under load | Notes |
 | --- | --- | --- | --- |
-| wlan0 (2.4 GHz) | NOT TESTED | NOT TESTED | NOT TESTED |
-| wlan1 (5 GHz) | NOT TESTED | NOT TESTED | NOT TESTED |
+| 2.4 GHz radio (identify via `iwinfo`) | NOT TESTED | NOT TESTED | NOT TESTED |
+| 5 GHz radio (identify via `iwinfo`) | NOT TESTED | NOT TESTED | NOT TESTED |
 
 ### Tailscale: direct vs DERP
 

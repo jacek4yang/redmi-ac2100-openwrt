@@ -33,9 +33,11 @@ exists for.
 - The init script is present, but the service is **not started and not
   joined**: there is no auth key in the image, no `--auth-key` anywhere, no
   auto-join logic. First boot is dark until you run `tailscale up` yourself.
-- Flash cost is significant (~8 MB, noted in
-  [../config/performance.config](../config/performance.config)) — that is why
-  it lives in the full flavor, not in base.
+- Flash cost: one `tailscaled` binary plus a `tailscale` CLI symlink, stripped
+  by the OpenWrt build system (no UPX; build tags omit unused subsystems —
+  confirmed in the pinned feed Makefile). The exact in-image cost is measured
+  per build (compare base vs full artifact sizes in the CI metadata) rather
+  than estimated here.
 
 ## Configuring it (after flashing, on your own router)
 

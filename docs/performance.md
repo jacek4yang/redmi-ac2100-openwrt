@@ -21,19 +21,29 @@ First boot applies
 [../files/etc/uci-defaults/99-redmi-ac2100-tuning](../files/etc/uci-defaults/99-redmi-ac2100-tuning):
 
 - `firewall.@defaults[0].flow_offloading=1` — software flow offload:
-  established flows skip per-packet netfilter fast-path work (upstream
-  firewall4 feature).
+  established flows skip per-packet netfilter fast-path work. Option name and
+  semantics confirmed in the pinned firewall4 source (`fw4.uc`
+  `parse_defaults()` at `PKG_SOURCE_VERSION b6e51575`, the rev pinned by
+  v25.12.2).
 - `firewall.@defaults[0].flow_offloading_hw=1` — hardware flow offload onto
-  the MT7621 PPE (Packet Processing Engine) via the upstream `mtk_eth_soc`
-  driver's flow-offload support (confirmed upstream: kernel mtk_eth_soc
-  integrates with the netfilter flowtable infrastructure).
+  the MT7621 PPE (Packet Processing Engine). Evidence at v25.12.2 /
+  kernel 6.12.74: the mt7621 kernel config sets `CONFIG_NET_MEDIATEK_SOC=y`,
+  which builds `mtk_ppe.o` + `mtk_ppe_offload.o` unconditionally
+  (`drivers/net/ethernet/mediatek/Makefile`); `mtk_ppe.c` carries
+  MT7621-specific FOE-table code (`IS_ENABLED(CONFIG_SOC_MT7621)` quirk in
+  `mtk_ppe_init_foe_table()`); and fw4 emits `flowtable ft { ... flags offload }`
+  when the option is set. If the device cannot take hw offload, fw4 logs
+  "Hardware flow offloading unavailable, falling back to software offloading"
+  and continues on the software path — so this default fails soft.
 
 What this accelerates (upstream-supported; **must be verified on hardware**
 per [benchmarks.md](benchmarks.md)):
 
 - routed IPv4, including NAT masquerade;
-- PPPoE-encapsulated IPv4 traffic — the MTK PPE handles PPPoE encapsulation
-  upstream, which matters because the production WAN is PPPoE
+- PPPoE-encapsulated IPv4 traffic — the PPE path has explicit PPPoE support
+  upstream (`mtk_foe_entry_set_pppoe()` in `mtk_ppe.c`;
+  `FLOW_ACTION_PPPOE_PUSH` handling in `mtk_ppe_offload.c`, kernel 6.12.74),
+  which matters because the production WAN is PPPoE
   ([ipv6-design.md](ipv6-design.md)).
 
 What it does **not** accelerate:
@@ -65,13 +75,27 @@ mental model is a **choice**, not a stack:
 ## Packet steering: explicitly off
 
 `network.globals.packet_steering='0'` is pinned by the uci-defaults script.
-The OpenWrt default is already off; the pin makes the intent explicit.
-Rationale: community-documented reports of latency spikes and NIC stalls
-under RPS/packet-steering on dual-core MT7621 — **documented community
-evidence, to be verified under benchmarks** — while the mtk_eth_soc driver
-already spreads RX processing via NAPI across both cores. If benchmarks later
-show one core saturated in softirq, RPS/XPS gets revisited with data, not
-folklore.
+(Unset means off in the netifd implementation — the pin only makes the intent
+explicit; LuCI may display/write its own default when its page is saved.)
+
+Evidence at v25.12.2 (all confirmed upstream):
+
+- implementation: `package/network/config/netifd` — `init.d/packet_steering`
+  calls `packet-steering.uc`, which writes per-queue
+  `rps_cpus`/`rps_flow_cnt` and tasksets threaded-NAPI threads (with an
+  `mtk_soc_eth`-specific matcher);
+- **current, open upstream bug**: openwrt/openwrt
+  [issue #24307](https://github.com/openwrt/openwrt/issues/24307) (2026-07,
+  open) — MT7621 `mtk_soc_eth` NETDEV WATCHDOG on TX queue 4 *when packet
+  steering is enabled*;
+- [issue #18901](https://github.com/openwrt/openwrt/issues/18901) (2025-05,
+  open) — packet steering measurably hurts an MT7621 device in the SQM
+  scenario.
+
+So: steering **off by default** as a conservative, evidence-backed choice for
+this SoC — not a claim that off is universally faster. If benchmarks later
+show one core saturated in softirq with steering off, RPS/XPS gets revisited
+with data, not folklore.
 
 ## IRQ / RPS / XPS stance
 
