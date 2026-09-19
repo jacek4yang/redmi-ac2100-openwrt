@@ -1,0 +1,10 @@
+# Line-ending discipline: this repo is authored on Windows but consumed by
+# Linux build tooling (GitHub Actions / OpenWrt). Everything textual is LF.
+* text=auto
+*.sh        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.config    text eol=lf
+*.md        text eol=lf
+*.ps1       text eol=lf
+files/**    text eol=lf

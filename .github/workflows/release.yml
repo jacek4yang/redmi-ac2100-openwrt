@@ -1,0 +1,81 @@
+name: release
+
+# MANUAL-ONLY release flow. Pushing a v* tag does NOT trigger this workflow.
+# Default behavior (publish_release=false): build and validate artifacts only.
+# A GitHub prerelease is created only when a human explicitly dispatches this
+# workflow with publish_release=true and provides a tag.
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Actually create the GitHub prerelease (false = build + validate only)'
+        required: true
+        default: false
+        type: boolean
+      tag:
+        description: 'Release tag, e.g. v0.1.0 (required when publish_release=true)'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build firmware (reuses build.yml)
+    uses: ./.github/workflows/build.yml
+
+  release:
+    name: Publish prerelease with images + checksums + metadata
+    needs: build
+    if: inputs.publish_release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Require an explicit tag
+        run: |
+          [ -n "${{ inputs.tag }}" ] || { echo "ERROR: input 'tag' is empty; refusing to publish." >&2; exit 1; }
+
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: redmi-ac2100-firmware-*
+          merge-multiple: true
+          path: dist
+
+      - name: Generate release notes
+        run: |
+          {
+            echo "Custom OpenWrt 25.12.2 firmware for **Xiaomi Redmi Router AC2100**"
+            echo "(the six-antenna Redmi model - **NOT** Xiaomi Mi Router AC2100)."
+            echo
+            echo "## Artifacts"
+            echo
+            echo "- \`*-squashfs-kernel1.bin\` + \`*-squashfs-rootfs0.bin\` - initial-flash pair (stock->OpenWrt path)"
+            echo "- \`*-squashfs-sysupgrade.bin\` - OpenWrt-to-OpenWrt upgrades"
+            echo "- \`*-initramfs-kernel.bin\` - RAM-only recovery/netboot image"
+            echo "- \`SHA256SUMS\`, \`build-metadata.txt\`, \`config.buildinfo\` (sanitized config seed)"
+            echo
+            echo "Verify with \`sha256sum -c SHA256SUMS\`."
+            echo
+            echo "Flashing instructions are intentionally not published yet;"
+            echo "this repository is in the no-flash validation stage (see README)."
+            echo
+            echo '## Build metadata'
+            echo
+            echo '```'
+            cat dist/build-metadata.txt
+            echo '```'
+          } > RELEASE-NOTES.md
+
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ inputs.tag }}" \
+            --prerelease \
+            --target "${{ github.sha }}" \
+            --title "Redmi AC2100 custom firmware ${{ inputs.tag }}" \
+            --notes-file RELEASE-NOTES.md \
+            dist/*

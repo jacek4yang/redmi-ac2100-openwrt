@@ -1,0 +1,13 @@
+# Router dump data and raw flash images - never commit
+dump-*/
+dump-*.zip
+*.bin
+
+# Local scratch / analysis material
+.local/
+.cache/
+
+# Build output
+build/
+work/
+tmp/

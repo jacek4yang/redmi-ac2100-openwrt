@@ -1,0 +1,37 @@
+#!/bin/sh
+# First-boot runtime tuning for the custom Redmi AC2100 (MT7621) firmware.
+# Runs once via OpenWrt uci-defaults, then deletes itself.
+# Every knob here is justified in docs/performance.md - no cargo cult.
+
+# --- Flow offloading ---------------------------------------------------------
+# Software flow offload: skips per-packet netfilter fast-path work for
+# established flows. Baseline fast path for IPv4 NAT incl. PPPoE.
+uci set firewall.@defaults[0].flow_offloading='1'
+
+# Hardware flow offload: MT7621 PPE (Packet Processing Engine) via the
+# upstream mtk_eth_soc flow-offload support. Primary fast path for ordinary
+# routed IPv4 traffic, including PPPoE-encapsulated flows.
+# Caveat (documented in docs/performance.md): traffic that must be seen by
+# netfilter (e.g. SQM) bypasses this; do not enable SQM and expect hw offload.
+uci set firewall.@defaults[0].flow_offloading_hw='1'
+uci commit firewall
+
+# --- Packet steering: explicitly left OFF ------------------------------------
+# CONFIG/unset default is off; we pin '0' to make the intent explicit.
+# Rationale in docs/performance.md (MT7621 RPS/packet-steering has a history
+# of latency spikes and NIC stalls under load on dual-core MT7621; the
+# ethernet driver already spreads RX processing via NAPI on both cores).
+uci set network.globals.packet_steering='0'
+uci commit network
+
+# --- Wi-Fi: regulatory domain is intentionally NOT set ------------------------
+# OpenWrt default (world regdomain) stays until the owner sets their own
+# country via LuCI/uci. See docs/performance.md for the channel-selection
+# methodology. Nothing Wi-Fi is touched here.
+
+# --- conntrack: kernel defaults kept ------------------------------------------
+# Default conntrack table size is sufficient for a home router workload on
+# 128 MiB RAM; sizing experiments belong to the benchmark phase
+# (docs/benchmarks.md), not to blind defaults.
+
+exit 0

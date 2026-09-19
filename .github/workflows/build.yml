@@ -1,0 +1,78 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:   # reused by release.yml
+
+env:
+  FLAVOR: full
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hygiene:
+    name: Repository hygiene gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: verify-repo
+        run: bash scripts/verify-repo.sh
+
+  build:
+    name: Build OpenWrt 25.12.2 (ramips/mt7621, Redmi AC2100)
+    needs: hygiene
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          # Package list per official OpenWrt build-system docs (Ubuntu 24.04):
+          # https://openwrt.org/docs/guide-developer/toolchain/install-buildsystem
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential clang flex bison g++ gawk \
+            gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
+            python3-setuptools rsync swig unzip zlib1g-dev file wget
+
+      # Safe caching only: upstream source tarballs (dl/) and the
+      # content-addressed compiler cache. Build state (build_dir/staging_dir)
+      # is deliberately NOT cached - it would compromise reproducibility.
+      - name: Cache OpenWrt source downloads
+        uses: actions/cache@v4
+        with:
+          path: work/openwrt/dl
+          key: openwrt-dl-25.12.2-${{ hashFiles('config/base.config', 'config/performance.config') }}
+          restore-keys: openwrt-dl-25.12.2-
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: work/openwrt/.ccache
+          key: openwrt-ccache-25.12.2-${{ github.run_id }}
+          restore-keys: openwrt-ccache-25.12.2-
+
+      - name: Prepare pinned OpenWrt tree (clone, verify commit, feeds, config, overlay)
+        run: bash scripts/prepare.sh
+
+      - name: Build firmware (defconfig, download, make, verify images)
+        run: bash scripts/build.sh
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: redmi-ac2100-firmware-${{ github.sha }}
+          path: |
+            work/openwrt/bin/targets/ramips/mt7621/*xiaomi_redmi-router-ac2100*
+            work/openwrt/bin/targets/ramips/mt7621/SHA256SUMS
+            work/openwrt/bin/targets/ramips/mt7621/build-metadata.txt
+            work/openwrt/bin/targets/ramips/mt7621/config.buildinfo
+          if-no-files-found: error
+          retention-days: 14
