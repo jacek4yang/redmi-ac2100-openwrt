@@ -36,6 +36,13 @@ if [ -d "${WORK_DIR}/.git" ]; then
     fi
     log "OpenWrt checkout present at pinned commit, reusing"
 else
+    if [ -e "${WORK_DIR}" ] && [ -n "$(ls -A "${WORK_DIR}" 2>/dev/null)" ]; then
+        echo "ERROR: ${WORK_DIR} exists, is not empty, and is not a git checkout." >&2
+        echo "       A cache (dl/, .ccache/) must be restored AFTER this script, not before" >&2
+        echo "       (CI run 35453035164 failed here with git exit 128). Otherwise move the" >&2
+        echo "       stale directory away manually; prepare.sh never deletes unexpected content." >&2
+        exit 1
+    fi
     log "Cloning OpenWrt ${OPENWRT_TAG} (shallow)"
     git clone --depth 1 --branch "${OPENWRT_TAG}" "${OPENWRT_REPO}" "${WORK_DIR}"
 fi

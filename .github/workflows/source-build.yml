@@ -71,9 +71,16 @@ jobs:
             gcc-multilib g++-multilib gettext git libncurses5-dev libssl-dev \
             python3-setuptools rsync swig unzip zlib1g-dev file wget zstd
 
+      - name: "[CLONE+FEEDS] prepare pinned tree (clone, verify commit, feeds, config, overlay)"
+        run: bash scripts/prepare.sh
+
       # Safe caching only: upstream source tarballs (dl/) and the
       # content-addressed compiler cache. build_dir/ and staging_dir/ are
       # never cached - that would compromise reproducibility.
+      # ORDERING CONSTRAINT (run 35453035164, exit 128): restoring these
+      # caches BEFORE the clone recreates work/openwrt/ non-empty, which makes
+      # git clone fail ("destination path already exists and is not empty").
+      # They must stay AFTER [CLONE+FEEDS]; prepare.sh hard-fails otherwise.
       - name: Cache OpenWrt source downloads
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -87,9 +94,6 @@ jobs:
           path: work/openwrt/.ccache
           key: openwrt-ccache-src-25.12.2-${{ github.run_id }}
           restore-keys: openwrt-ccache-src-25.12.2-
-
-      - name: "[CLONE+FEEDS] prepare pinned tree (clone, verify commit, feeds, config, overlay)"
-        run: bash scripts/prepare.sh
 
       - name: "[DEFCONFIG]"
         run: |
