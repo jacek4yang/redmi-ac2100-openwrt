@@ -36,13 +36,6 @@ jobs:
     name: Full Buildroot (canonical source config)
     runs-on: ubuntu-24.04
     timeout-minutes: 360
-    env:
-      # OpenWrt wraps compilers with ccache (CONFIG_CCACHE=y in base.config)
-      # but never sets CCACHE_DIR itself - without this the cache lands in
-      # ~/.cache/ccache, which is NOT the path we cache, and nothing is ever
-      # restored (observed on runs 35452208528/35460747904). Must be absolute:
-      # build steps cd into work/openwrt.
-      CCACHE_DIR: ${{ github.workspace }}/work/openwrt/.ccache
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 

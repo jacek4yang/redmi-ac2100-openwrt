@@ -66,6 +66,16 @@ forbid 'CONFIG_PACKAGE_samba4=y'
 forbid 'CONFIG_PACKAGE_minidlna=y'
 forbid 'CONFIG_PACKAGE_kmod-usb-storage=y'
 
+# ---- Seed survival: every CONFIG_*=y in the seed must survive defconfig -----------
+# kconfig silently drops seed symbols whose prompts are gated on unset deps
+# (observed: CONFIG_CCACHE without CONFIG_DEVEL, runs 35452208528..35464072806 -
+# three "green" builds compiled without ccache). Fail before wasting an hour.
+# Process substitution, not a pipe: err() must mutate fail in THIS shell.
+SEED="${REPO_ROOT}/config/base.config"
+while IFS= read -r sym; do
+    grep -q "^${sym}=y$" "${CFG}" || err "seed symbol did not survive defconfig: ${sym} (gated kconfig prompt?)"
+done < <(grep -oE '^CONFIG_[A-Za-z0-9_]+=y$' "${SEED}" | cut -d= -f1)
+
 if [ ${fail} -ne 0 ]; then
     echo "verify-config: FAILED (${OPENWRT_DIR}/.config, flavor=${FLAVOR})" >&2
     exit 1
