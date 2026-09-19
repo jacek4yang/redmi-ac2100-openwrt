@@ -38,6 +38,11 @@ from release.yml. Two jobs:
    UCI passwords, real-looking MAC addresses), guards the device identity of
    the build inputs, and checks that required files exist.
 2. **build** (needs: hygiene, 360-minute cap):
+   - frees runner disk space (a stock runner has only ~14 GB free; this build
+     additionally compiles host-side Go for tailscale — run 35438257237 failed
+     2 h in with golang1.26-host and ppp dying simultaneously, the classic
+     disk-exhaustion signature). Only unused preinstalled toolchains
+     (dotnet/Android/GHC/docker images/…) are removed;
    - installs the official apt dependency set;
    - restores the two safe caches (below);
    - `bash scripts/prepare.sh` — shallow-clone OpenWrt v25.12.2, **verify HEAD
@@ -46,7 +51,9 @@ from release.yml. Two jobs:
      `build-metadata.txt`, seed `.config` from the selected flavor, apply the
      `files/` overlay, apply any `patches/` (none currently);
    - `bash scripts/build.sh` — `make defconfig`, save `config.buildinfo`
-     (diffconfig), `make download`, `make -j$(nproc)`, then
+     (diffconfig), `make download`, `make -j$(nproc)` (on failure the script
+     automatically re-runs with `-j1 V=s` so the exact compiler error lands in
+     the CI log), then
      [../scripts/verify-images.sh](../scripts/verify-images.sh);
    - uploads `*xiaomi_redmi-router-ac2100*` images plus `SHA256SUMS`,
      `build-metadata.txt` and `config.buildinfo` (14-day retention,

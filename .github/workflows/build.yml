@@ -32,6 +32,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Full OpenWrt builds incl. host-side Go (pulled in by tailscale) exceed
+      # the ~14 GB free on a stock runner. The removed preinstalled toolchains
+      # are unused by this build. (Run 35438257237: golang1.26 host and ppp
+      # failed simultaneously 2h in - the classic disk-exhaustion signature.)
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/powershell /usr/share/swift /opt/azcopy \
+            /usr/local/sqlpackage /usr/lib/mono /opt/hostedtoolcache || true
+          sudo docker image prune -a -f || true
+          sudo apt-get clean
+          df -h /
+
       - name: Install build dependencies
         run: |
           # Package list per official OpenWrt build-system docs (Ubuntu 24.04):

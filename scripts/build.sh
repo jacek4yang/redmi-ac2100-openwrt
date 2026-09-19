@@ -27,7 +27,10 @@ log "make download (-j${JOBS})"
 make download -j"${JOBS}"
 
 log "make (-j${JOBS})"
-make ${MAKE_V:+V="${MAKE_V}"} -j"${JOBS}"
+if ! make ${MAKE_V:+V="${MAKE_V}"} -j"${JOBS}"; then
+    log "parallel build failed - re-running with -j1 V=s so the exact error is visible in CI logs"
+    make V=s -j1
+fi
 
 log "Verifying generated images"
 "${REPO_ROOT}/scripts/verify-images.sh" "${WORK_DIR}/bin/targets/ramips/mt7621"
