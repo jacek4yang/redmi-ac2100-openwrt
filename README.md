@@ -38,7 +38,7 @@ Full detail and evidence per component: [docs/hardware.md](docs/hardware.md).
 | SoC | MediaTek MT7621A, dual-core MIPS 1004Kc V2.15 (4 threads), 880 MHz |
 | RAM | 128 MiB DDR3 |
 | Flash | 128 MiB NAND (layout: [docs/stock-flash-layout.md](docs/stock-flash-layout.md)) |
-| Switch | MT7530 gigabit switch (1x WAN + 2x LAN) |
+| Switch | MT7530 gigabit switch (1x WAN + 3x LAN) |
 | Wi-Fi 2.4 GHz | MediaTek MT7603EN (802.11n), `kmod-mt7603` |
 | Wi-Fi 5 GHz | MediaTek MT7615N (802.11ac), `kmod-mt7615-firmware` |
 | Antennas | 6 external |
@@ -67,10 +67,16 @@ CI is authoritative. Firmware builds on GitHub Actions Ubuntu 24.04 via
    guard, required-files check.
 2. **Prepare** — clone OpenWrt v25.12.2 shallow, verify the pinned commit,
    install pinned feeds, seed the flavor config, apply the `files/` overlay.
-3. **Build** — defconfig, download, make, then
-   [scripts/verify-images.sh](scripts/verify-images.sh) validates artifacts and
-   writes `SHA256SUMS`.
-4. **Upload** — images + `SHA256SUMS` + `build-metadata.txt` + `config.buildinfo`.
+3. **Build** — defconfig, resolved-config audit
+   ([scripts/verify-config.sh](scripts/verify-config.sh)), download, make, then
+   [scripts/verify-images.sh](scripts/verify-images.sh) validates artifacts
+   (identity, structure, partition-fit ceilings, `profiles.json` cross-check)
+   and writes `SHA256SUMS`.
+4. **Upload** — images + `SHA256SUMS` + `build-metadata.txt` +
+   `config.buildinfo` + `profiles.json`.
+
+Steps 2–4 run as a **matrix over both flavors** (`base` and `full`), so CI
+proves the lean fallback and the full image independently.
 
 [.github/workflows/release.yml](.github/workflows/release.yml) runs **only when
 manually dispatched** (`workflow_dispatch`). By default it just rebuilds and
@@ -91,7 +97,7 @@ Full detail: [docs/build.md](docs/build.md).
 | `*-squashfs-kernel1.bin` | OpenWrt kernel image for the `kernel` partition; half of the initial-flash pair (with rootfs0) |
 | `*-squashfs-rootfs0.bin` | OpenWrt UBI rootfs image; half of the initial-flash pair (with kernel1) |
 | `*-squashfs-sysupgrade.bin` | combined image for OpenWrt-to-OpenWrt upgrades |
-| `*-initramfs-kernel.bin` | RAM-only image for netboot/recovery scenarios |
+| `*-initramfs-kernel.bin` | RAM-only image for netboot/recovery scenarios (explicitly enabled via `CONFIG_TARGET_ROOTFS_INITRAMFS=y` in base.config; validated in CI) |
 | `SHA256SUMS`, `build-metadata.txt`, `config.buildinfo` | checksums, pinned-revision metadata, sanitized config (diffconfig) |
 
 Upstream ships **no factory.bin** for this device (confirmed upstream); the
