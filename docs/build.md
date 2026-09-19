@@ -180,11 +180,17 @@ Milestone evidence (see README for the milestone definitions):
 
 Measured CI facts worth knowing:
 
-- ccache before the `CCACHE_DIR` fix: the cache action never stored anything —
-  OpenWrt does not set `CCACHE_DIR` itself, so ccache wrote to
-  `~/.cache/ccache`, outside the cached path. Both green source runs compiled
-  cold (~53–57 min). After the fix, cache hits must be observed in the
-  `[CACHE]` step before any speedup is claimed.
+- ccache: three consecutive green source runs (35452208528, 35460747904,
+  35464072806) compiled **without** ccache. Root cause chain, established from
+  the pinned source rather than guessed: `CONFIG_CCACHE`'s kconfig prompt is
+  gated on `DEVEL` (`config/Config-devel.in:136`), so a seed containing only
+  `CONFIG_CCACHE=y` is silently forced back to n by `make defconfig`. The
+  follow-up attempt of exporting `CCACHE_DIR` as workflow env (run 35464072806)
+  could not work either: `rules.mk:354` unconditionally `export
+  CCACHE_DIR:=$(TOPDIR)/.ccache`, overriding the environment. Fix: seed now
+  sets `CONFIG_DEVEL=y` + `CONFIG_CCACHE=y`, and verify-config.sh hard-fails if
+  any seed `=y` symbol does not survive defconfig. No compile-time speedup is
+  claimed until cache hits are observed in the `[CACHE]` step.
 
 ## Official upstream reference artifacts
 
