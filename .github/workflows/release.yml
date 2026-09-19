@@ -18,12 +18,13 @@ on:
         default: ''
         type: string
 
+# Least privilege: read-only by default; the publish job alone gets write.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
-    name: Build firmware (reuses build.yml)
+    name: Build firmware (reuses build.yml; both flavors)
     uses: ./.github/workflows/build.yml
 
   release:
@@ -32,17 +33,30 @@ jobs:
     if: inputs.publish_release
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    permissions:
+      contents: write
     steps:
       - name: Require an explicit tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          [ -n "${{ inputs.tag }}" ] || { echo "ERROR: input 'tag' is empty; refusing to publish." >&2; exit 1; }
+          [ -n "${RELEASE_TAG}" ] || { echo "ERROR: input 'tag' is empty; refusing to publish." >&2; exit 1; }
+          # Tag names become release identity; reject anything but a safe shape.
+          echo "${RELEASE_TAG}" | grep -qE '^v[0-9A-Za-z._-]+$' \
+            || { echo "ERROR: tag '${RELEASE_TAG}' must match ^v[0-9A-Za-z._-]+$" >&2; exit 1; }
 
-      - name: Download firmware artifacts
-        uses: actions/download-artifact@v4
+      - name: Download firmware artifacts (full flavor only; filenames collide across flavors)
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          pattern: redmi-ac2100-firmware-*
-          merge-multiple: true
+          pattern: redmi-ac2100-firmware-full-*
+          merge-multiple: false
           path: dist
+
+      - name: Stage full-flavor files
+        run: |
+          mkdir -p staged
+          cp dist/redmi-ac2100-firmware-full-*/* staged/
+          ls -la staged/
 
       - name: Generate release notes
         run: |
@@ -51,6 +65,9 @@ jobs:
             echo "(the six-antenna Redmi model - **NOT** Xiaomi Mi Router AC2100)."
             echo
             echo "## Artifacts"
+            echo
+            echo "Files are from the \`full\` flavor build; the lean \`base\` flavor is"
+            echo "available as a CI artifact on the workflow run."
             echo
             echo "- \`*-squashfs-kernel1.bin\` + \`*-squashfs-rootfs0.bin\` - initial-flash pair (stock->OpenWrt path)"
             echo "- \`*-squashfs-sysupgrade.bin\` - OpenWrt-to-OpenWrt upgrades"
@@ -65,17 +82,18 @@ jobs:
             echo '## Build metadata'
             echo
             echo '```'
-            cat dist/build-metadata.txt
+            cat staged/build-metadata.txt
             echo '```'
           } > RELEASE-NOTES.md
 
       - name: Create GitHub prerelease
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          gh release create "${{ inputs.tag }}" \
+          gh release create "${RELEASE_TAG}" \
             --prerelease \
             --target "${{ github.sha }}" \
-            --title "Redmi AC2100 custom firmware ${{ inputs.tag }}" \
+            --title "Redmi AC2100 custom firmware ${RELEASE_TAG}" \
             --notes-file RELEASE-NOTES.md \
-            dist/*
+            staged/*

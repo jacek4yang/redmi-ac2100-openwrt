@@ -37,12 +37,15 @@ from release.yml. Two jobs:
    secrets (private keys, Tailscale `tskey-` tokens, NVRAM password values,
    UCI passwords, real-looking MAC addresses), guards the device identity of
    the build inputs, and checks that required files exist.
-2. **build** (needs: hygiene, 360-minute cap):
-   - frees runner disk space (a stock runner has only ~14 GB free; this build
-     additionally compiles host-side Go for tailscale — run 35438257237 failed
-     2 h in with golang1.26-host and ppp dying simultaneously, the classic
-     disk-exhaustion signature). Only unused preinstalled toolchains
-     (dotnet/Android/GHC/docker images/…) are removed;
+2. **build** (needs: hygiene, 360-minute cap), as a **matrix over both flavors**
+   (`base` and `full`, `fail-fast: false` so one flavor's failure never hides
+   the other's result):
+   - frees runner disk space (a stock runner had only ~14 GB free — measured
+     in run 35444693304: 14 GB before this step, 42 GB after; run 35438257237
+     had failed 2 h in with golang1.26-host and ppp dying simultaneously, the
+     disk-exhaustion signature later confirmed by this fix). Only unused
+     preinstalled toolchains (dotnet/Android/GHC/docker images/…) are removed,
+     every removal guarded;
    - installs the official apt dependency set;
    - restores the two safe caches (below);
    - `bash scripts/prepare.sh` — shallow-clone OpenWrt v25.12.2, **verify HEAD
@@ -65,8 +68,8 @@ Only two paths are cached, both safe by construction:
 
 | Cache | Key shape | Why it is safe |
 | --- | --- | --- |
-| `work/openwrt/dl` (upstream source tarballs) | `openwrt-dl-25.12.2-<hash of config seeds>` | tarballs are content-fetched and hash-verified by the OpenWrt build system itself |
-| `work/openwrt/.ccache` | `openwrt-ccache-25.12.2-<run_id>` with prefix restore-keys | ccache is content-addressed over preprocessed source; a hit is byte-identical to a fresh compile |
+| `work/openwrt/dl` (upstream source tarballs) | `openwrt-dl-25.12.2`, shared by both flavors | tarballs are content-fetched and hash-verified by the OpenWrt build system itself; a superset cache is harmless |
+| `work/openwrt/.ccache` | `openwrt-ccache-25.12.2-<flavor>-<run_id>` with per-flavor prefix restore-keys | ccache is content-addressed over preprocessed source; a hit is byte-identical to a fresh compile |
 
 Build state (`build_dir/`, `staging_dir/`) is **never cached**: stale object
 trees silently survive config and patch changes, which would make artifacts a
@@ -79,15 +82,30 @@ reproducibility.
 
 - any `xiaomi_mi-router-ac2100` artifact exists (wrong device — never valid
   here);
-- a required Redmi artifact (`squashfs-kernel1`, `squashfs-rootfs0`,
-  `squashfs-sysupgrade`) is missing, empty, duplicated, or below a
-  conservative size floor (floors derive from the official 25.12.2 sizes:
-  kernel1 3,312,916 B, rootfs0 6,029,312 B, sysupgrade 8,233,543 B —
-  confirmed upstream);
+- a required artifact (`squashfs-kernel1`, `squashfs-rootfs0`,
+  `squashfs-sysupgrade`, `initramfs-kernel`) is missing, empty, duplicated, or
+  outside its size window — floors derive from the official 25.12.2 sizes
+  (confirmed upstream), ceilings from the device partition map:
+  `kernel1 <= 4 MiB` (OpenWrt `kernel` partition), `rootfs0 <= 120320 KiB`
+  (`ubi` span = `IMAGE_SIZE`, also enforced upstream by `check-size`),
+  `sysupgrade` under a documented composition bound, `initramfs-kernel` in a
+  RAM-image sanity window;
+- magic/structure checks fail: kernel1/initramfs must be uImage, rootfs0 must
+  start with the UBI EC magic, sysupgrade must be a tar with `CONTROL`,
+  `kernel`, `root` members whose appended metadata names
+  `xiaomi,redmi-router-ac2100`;
+- the upstream-generated `profiles.json` disagrees (wrong target/arch/device,
+  or a recorded image sha256 mismatches the actual file);
 - the build `.config` (when reachable) does not select the Redmi device
   profile.
 
-On success it writes `SHA256SUMS` over all device `.bin` files.
+On success it writes `SHA256SUMS` over all device `.bin` files and appends
+artifact names/sizes/hashes to `build-metadata.txt`.
+
+The resolved configuration is audited even earlier — right after
+`make defconfig` — by [../scripts/verify-config.sh](../scripts/verify-config.sh)
+(target/device, PPPoE, firewall4, IPv6, odhcp6c/odhcpd, LuCI, mt76 radios,
+initramfs, flavor-gated packages, bloat tripwires).
 
 ### Release flow
 
