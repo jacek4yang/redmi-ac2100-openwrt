@@ -51,9 +51,11 @@ fi
 log "device identity verified (Redmi Router AC2100, ramips/mt7621)"
 
 # ---- 5. Required files ------------------------------------------------------------------
-for f in config/base.config config/performance.config \
-         scripts/prepare.sh scripts/build.sh scripts/verify-config.sh scripts/verify-images.sh scripts/inspect-stock.ps1 \
-         .github/workflows/build.yml .github/workflows/release.yml \
+for f in config/base.config config/packages-base.list config/packages-full.list \
+         scripts/prepare.sh scripts/build.sh scripts/imagebuild.sh \
+         scripts/verify-config.sh scripts/verify-images.sh scripts/inspect-stock.ps1 \
+         .github/workflows/hygiene.yml .github/workflows/imagebuilder.yml \
+         .github/workflows/source-build.yml .github/workflows/release.yml \
          README.md LICENSE docs/stock-flash-layout.md docs/performance.md docs/benchmarks.md; do
     [ -f "$f" ] || err "required file missing: $f"
 done

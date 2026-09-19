@@ -1,0 +1,27 @@
+# Full flavor = packages-base.list + this file.
+# Extra packages for observability and opt-in features. All come from the
+# official precompiled 25.12.2 feeds (no source compilation, no host Go).
+#
+# Runtime tuning is NOT a package matter: first-boot UCI defaults live in
+# files/etc/uci-defaults/99-redmi-ac2100-tuning (see docs/performance.md).
+
+# --- Observability / benchmarking (justified in docs/benchmarks.md) ---
+iperf3
+tcpdump-mini
+ethtool
+conntrack
+htop
+
+# --- Optional features (installed, never auto-configured) ---
+# tailscale: service not started, no auth key in the image (docs/tailscale.md).
+tailscale
+# smartdns + LuCI app: dnsmasq remains the LAN resolver until you opt in
+# (docs/performance.md).
+smartdns
+luci-app-smartdns
+
+# Deliberately NOT included (evaluated, rejected; see docs/performance.md):
+#   SQM / kmod-sched-cake / luci-app-sqm - conflicts with the hw-offload fast path
+#   irqbalance                           - no MT7621-specific evidence; measure first
+#   samba4 / minidlna / usb-storage      - out of scope for a lean router
+#   wpad-full / hostapd extras           - basic-mbedtls variant is sufficient

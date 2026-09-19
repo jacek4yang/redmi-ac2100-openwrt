@@ -1,0 +1,38 @@
+name: hygiene
+
+# Fast gate for every push and PR: repository hygiene, shell lint, syntax.
+# Runs regardless of which files changed. The job name "Repository hygiene
+# gate" is a required status check in branch protection - rename them together.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: Repository hygiene gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Shell lint (shellcheck)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends shellcheck
+          shellcheck -S warning scripts/*.sh
+
+      - name: Bash syntax check
+        run: |
+          for f in scripts/*.sh files/etc/uci-defaults/*; do
+            bash -n "$f" || exit 1
+          done
+          echo "syntax OK"
+
+      - name: Repository verification (secrets, ignore rules, device identity)
+        run: bash scripts/verify-repo.sh

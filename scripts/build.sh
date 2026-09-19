@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# build.sh - expand config, download sources, compile, verify artifacts.
+# build.sh - local one-shot driver for the canonical source build.
+#
+# CI (source-build.yml) runs the same stages as separately named steps; this
+# script exists for local Linux builds and mirrors that stage order.
 #
 # Usage:  scripts/build.sh
 # Env:    WORK_DIR=<path>   (default: work/openwrt)
@@ -13,29 +16,35 @@ JOBS="${BUILD_JOBS:-$(nproc)}"
 
 [ -f "${WORK_DIR}/.config" ] || { echo "ERROR: run scripts/prepare.sh first" >&2; exit 1; }
 
-log() { printf '==> %s\n' "$*"; }
+log() { printf '[%s] ==> %s\n' "$(date -u +%H:%M:%SZ)" "$*"; }
 
 cd "${WORK_DIR}"
 
-log "make defconfig"
+log "[DEFCONFIG]"
 make defconfig
 
-log "Saving sanitized config (diffconfig) for release metadata"
+log "Saving sanitized config (diffconfig) for build metadata"
 ./scripts/diffconfig.sh > "${WORK_DIR}/../config.buildinfo"
 
-log "Auditing resolved .config (fail fast before compiling)"
-bash "${REPO_ROOT}/scripts/verify-config.sh" "${WORK_DIR}" "${FLAVOR:-full}"
+log "[CONFIG VERIFY]"
+bash "${REPO_ROOT}/scripts/verify-config.sh" "${WORK_DIR}" base
 
-log "make download (-j${JOBS})"
+log "[DOWNLOAD] (-j${JOBS})"
 make download -j"${JOBS}"
+BROKEN="$(find dl -type f -size -1024c -print)"
+if [ -n "${BROKEN}" ]; then
+    log "deleting incomplete downloads and retrying:"; echo "${BROKEN}"
+    echo "${BROKEN}" | xargs -r rm -f
+    make download -j"${JOBS}"
+fi
 
-log "make (-j${JOBS})"
+log "[COMPILE] (-j${JOBS})"
 if ! make ${MAKE_V:+V="${MAKE_V}"} -j"${JOBS}"; then
-    log "parallel build failed - re-running with -j1 V=s so the exact error is visible in CI logs"
+    log "parallel build failed - re-running with -j1 V=s so the exact error is visible"
     make V=s -j1
 fi
 
-log "Verifying generated images"
+log "[CUSTOM VERIFY]"
 bash "${REPO_ROOT}/scripts/verify-images.sh" "${WORK_DIR}/bin/targets/ramips/mt7621"
 
 log "build.sh done"

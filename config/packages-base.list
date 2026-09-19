@@ -1,0 +1,12 @@
+# Base flavor package list for the official OpenWrt ImageBuilder (25.12.2).
+#
+# The ImageBuilder already includes the OpenWrt default router package set
+# (base-files, dnsmasq, firewall4, dropbear, odhcp6c, odhcpd-ipv6only, ppp,
+# ppp-mod-pppoe, wpad-basic-mbedtls, ...) plus this device profile's
+# DEVICE_PACKAGES (kmod-mt7603, kmod-mt7615-firmware).
+# Listed here is ONLY what the defaults lack. One package per line; # comments.
+#
+# Everything here must resolve from the official precompiled 25.12.2 feeds —
+# the ImageBuilder pipeline never compiles from source.
+
+luci

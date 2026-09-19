@@ -1,0 +1,88 @@
+name: imagebuilder
+
+# User-facing firmware is produced here from the OFFICIAL OpenWrt 25.12.2
+# ImageBuilder: precompiled packages, no toolchain/kernel compilation.
+# Milestones run sequentially in one job (each takes minutes) so a failing
+# layer is obvious from the failed step name:
+#   smoke (A: default + LuCI) -> base (B: + files overlay) -> full (C: + extras)
+# Triggers: only changes that can affect image content; docs-only commits and
+# source-build-only files do not run this. Fast enough for PRs.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'config/packages-*.list'
+      - 'files/**'
+      - 'scripts/imagebuild.sh'
+      - 'scripts/verify-images.sh'
+      - '.github/workflows/imagebuilder.yml'
+  pull_request:
+    paths:
+      - 'config/packages-*.list'
+      - 'files/**'
+      - 'scripts/imagebuild.sh'
+      - 'scripts/verify-images.sh'
+      - '.github/workflows/imagebuilder.yml'
+  workflow_dispatch:
+  workflow_call:   # reused by release.yml
+
+# Least privilege: read-only; no secrets exist on this repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ib-${{ github.ref }}
+  cancel-in-progress: true   # imagebuilder runs are minutes; cancelling is cheap
+
+jobs:
+  flavors:
+    name: ImageBuilder milestones (smoke -> base -> full)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install zstd (ImageBuilder tarball is .tar.zst)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends zstd
+
+      - name: Cache official ImageBuilder tarball (keyed by upstream SHA256)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: work/openwrt-imagebuilder-25.12.2-ramips-mt7621.Linux-x86_64.tar.zst
+          key: ib-25.12.2-c3bc6a9713054e278a8f010ee3b64b280362c3bf753aa291c63fc9cdd2d4d3ce
+
+      - name: "[A] smoke: profile + default packages + LuCI"
+        run: bash scripts/imagebuild.sh smoke
+
+      - name: Upload smoke artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: redmi-ac2100-firmware-smoke-${{ github.sha }}
+          path: work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: "[B] base: + files overlay"
+        run: bash scripts/imagebuild.sh base
+
+      - name: Upload base artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: redmi-ac2100-firmware-base-${{ github.sha }}
+          path: work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: "[C] full: + tailscale/smartdns/observability packages"
+        run: bash scripts/imagebuild.sh full
+
+      - name: Upload full artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: redmi-ac2100-firmware-full-${{ github.sha }}
+          path: work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/
+          if-no-files-found: error
+          retention-days: 14

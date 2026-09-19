@@ -40,10 +40,22 @@ fail=0
 err() { echo "VERIFY-FAIL: $*" >&2; fail=1; }
 log() { printf '==> %s\n' "$*"; }
 
+# initramfs is produced by the source Buildroot pipeline (it owns kernel-level
+# artifacts); the ImageBuilder pipeline sets REQUIRE_INITRAMFS=0 because the
+# official IB is not guaranteed to emit it and is not its research vehicle.
+REQUIRE_INITRAMFS="${REQUIRE_INITRAMFS:-1}"
+
 [ -d "${IMAGE_DIR}" ] || { echo "ERROR: image dir not found: ${IMAGE_DIR}" >&2; exit 1; }
 IMAGE_DIR="$(cd "${IMAGE_DIR}" && pwd)"   # resolve before any later cd
 cd "${IMAGE_DIR}"
-shopt -s nullglob
+
+# glob helper: expands to zero or more existing files, never to a literal pattern
+glob_list() {  # glob_list <pattern>...
+    local pat
+    for pat in "$@"; do
+        compgen -G "${pat}" || true
+    done
+}
 
 PY=
 if command -v python3 >/dev/null 2>&1; then PY=python3; elif command -v python >/dev/null 2>&1; then PY=python; fi
@@ -63,7 +75,16 @@ else
 fi
 
 # ---- 1. Forbidden device -----------------------------------------------------------
-bad_files=( *"${BAD}"* )
+# Any "mi-router" artifact that is not literally "redmi-router" is forbidden;
+# matching the bare substring keeps this robust against naming variants.
+mapfile -t maybe_bad < <(glob_list "*mi-router*")
+bad_files=()
+for f in ${maybe_bad[@]+"${maybe_bad[@]}"}; do
+    case "$f" in
+        *redmi-router*) ;;                        # ours
+        *) bad_files+=("$f") ;;
+    esac
+done
 if [ ${#bad_files[@]} -gt 0 ]; then
     err "forbidden Mi Router AC2100 artifact(s) present: ${bad_files[*]}"
 fi
@@ -73,7 +94,8 @@ declare -A FOUND
 check_one() {
     local kind="$1" min="$2" max="$3" f size
     # real names: <DEV>-squashfs-<kind>.bin, except initramfs: <DEV>-initramfs-kernel.bin
-    local matches=( *${DEV}-squashfs-${kind}.bin *${DEV}-${kind}.bin )
+    local matches=()
+    mapfile -t matches < <(glob_list "*${DEV}-squashfs-${kind}.bin" "*${DEV}-${kind}.bin")
     if [ ${#matches[@]} -eq 0 ]; then err "missing *${DEV}-*-${kind}.bin"; return; fi
     if [ ${#matches[@]} -gt 1 ]; then err "multiple ${kind} images: ${matches[*]}"; return; fi
     f="${matches[0]}"
@@ -90,9 +112,19 @@ check_one kernel1    ${K_MIN} ${K_MAX}
 check_one rootfs0    ${R_MIN} ${R_MAX}
 check_one sysupgrade ${S_MIN} ${S_MAX}
 
-# initramfs is optional-but-expected for this config (CONFIG_TARGET_ROOTFS_INITRAMFS=y);
-# treat missing as failure because our base.config requests it.
-check_one initramfs-kernel ${I_MIN} ${I_MAX}
+# initramfs is required only where this run's pipeline owns it (source build).
+if [ "${REQUIRE_INITRAMFS}" = "1" ]; then
+    check_one initramfs-kernel ${I_MIN} ${I_MAX}
+else
+    initramfs_matches=()
+    mapfile -t initramfs_matches < <(glob_list "*${DEV}-initramfs-kernel.bin")
+    if [ ${#initramfs_matches[@]} -gt 0 ]; then
+        printf '  OK  %-72s (present; not required by this pipeline)\n' "${initramfs_matches[0]}"
+        FOUND[initramfs-kernel]="${initramfs_matches[0]}"
+    else
+        log "note: no initramfs-kernel.bin (not required by this pipeline)"
+    fi
+fi
 
 # ---- 3. Magic / structure -----------------------------------------------------------
 magic_u32() {  # magic_u32 <file> - prints first 4 bytes as hex
@@ -180,7 +212,8 @@ if [ -n "${OPENWRT_ROOT}" ]; then
 fi
 
 # ---- 6. Checksums + artifact facts ------------------------------------------------------
-sums=( *${DEV}*.bin )
+sums=()
+mapfile -t sums < <(glob_list "*${DEV}*.bin")
 if [ ${#sums[@]} -gt 0 ] && [ ${fail} -eq 0 ]; then
     sha256sum "${sums[@]}" | sort -k2 > SHA256SUMS
     log "SHA256SUMS written (${#sums[@]} files)"

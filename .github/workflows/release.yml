@@ -24,8 +24,8 @@ permissions:
 
 jobs:
   build:
-    name: Build firmware (reuses build.yml; both flavors)
-    uses: ./.github/workflows/build.yml
+    name: Build firmware (reuses imagebuilder.yml; smoke/base/full milestones)
+    uses: ./.github/workflows/imagebuilder.yml
 
   release:
     name: Publish prerelease with images + checksums + metadata
