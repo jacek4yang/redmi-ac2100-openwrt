@@ -177,6 +177,8 @@ Milestone evidence (see README for the milestone definitions):
 | D–E (source Buildroot, canonical config + initramfs) | [35452208528](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35452208528) @ cc94b69 | **PASS** (53m34s). Emitted `initramfs-kernel.bin` (8,042,958 B), `kernel1` (3,417,262 B), `rootfs0` (6,029,312 B), `sysupgrade` (8,264,263 B); `SHA256SUMS` verified locally after download; feed commits recorded in `build-metadata.txt`. |
 | A–C re-validation | [35460747891](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35460747891) @ e157798 | **PASS**. **Reproducibility probe:** the full-flavor `kernel1`/`rootfs0`/`sysupgrade` are **bit-for-bit identical** to the ee561a1 run (two clean runners, ~2.5 h apart). ImageBuilder images are reproducible for identical inputs. |
 | D–E re-validation | [35460747904](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35460747904) @ e157798 | **PASS** (57m23s). First run exercising the cache-restore-after-clone fix on a cache hit; `dl/` cache (567 MB) restored successfully. Disk: 87 GiB free before cleanup → 115 GiB after (gate ≥ 30 GiB) → 104 GiB post-build (`build_dir` 9.1 GiB, `staging_dir` 753 MiB). `kernel1` bit-for-bit identical to the cc94b69 run; `rootfs0`/`sysupgrade`/`initramfs` **differ** — the source Buildroot path is *not* bit-for-bit reproducible across runs (unlike the ImageBuilder path); root cause not yet isolated (candidate: file mtimes in rootfs assembly), tracked as an open question, not claimed. |
+| D–E + ccache enablement | [35466252661](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35466252661) @ 4286bb4 | **PASS** (48m02s, cold). First build with ccache actually active (`CONFIG_DEVEL=y` + `CONFIG_CCACHE=y` survived defconfig, asserted by the new seed-survival check); cache populated and saved (key `openwrt-ccache-src-25.12.2-35466252661`). |
+| D–E warm-cache validation | [35468829805](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35468829805) @ 42c0a91 | **PASS** (34m32s). ccache restored from the cold run's key (160 MB); **observed hits: 21065/37558 (56.09%)**, cache 0.6/5.0 GiB. Cold→warm: 48m02s → 34m32s on a single warm sample (~28% faster; one observation, not a benchmark). Artifact `SHA256SUMS` verified locally after download; feed commits identical to the cc94b69 run. |
 
 Measured CI facts worth knowing:
 
@@ -189,8 +191,10 @@ Measured CI facts worth knowing:
   could not work either: `rules.mk:354` unconditionally `export
   CCACHE_DIR:=$(TOPDIR)/.ccache`, overriding the environment. Fix: seed now
   sets `CONFIG_DEVEL=y` + `CONFIG_CCACHE=y`, and verify-config.sh hard-fails if
-  any seed `=y` symbol does not survive defconfig. No compile-time speedup is
-  claimed until cache hits are observed in the `[CACHE]` step.
+  any seed `=y` symbol does not survive defconfig. Warm-cache benefit has since
+  been observed (run 35468829805: 56.09% hit rate, 48m02s → 34m32s on one warm
+  sample) — a single observation, treated as directional evidence, not a
+  guaranteed speedup.
 
 ## Official upstream reference artifacts
 
