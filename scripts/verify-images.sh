@@ -60,16 +60,21 @@ glob_list() {  # glob_list <pattern>...
 PY=
 if command -v python3 >/dev/null 2>&1; then PY=python3; elif command -v python >/dev/null 2>&1; then PY=python; fi
 
-# ---- 0. Build identity (when the build tree is present) --------------------------
+# ---- 0. Build identity (only when a Buildroot .config is reachable) ---------------
+# ImageBuilder output dirs have no such .config; manifest/profile checks in
+# imagebuild.sh carry the identity audit there. This section is for the
+# source-build pipeline only.
 OPENWRT_ROOT="$(cd "${IMAGE_DIR}/../../../.." 2>/dev/null && pwd || true)"
 if [ -n "${OPENWRT_ROOT}" ] && [ -f "${OPENWRT_ROOT}/.config" ]; then
-    grep -q "^CONFIG_TARGET_ramips_mt7621_DEVICE_${DEV}=y" "${OPENWRT_ROOT}/.config" \
-        || err ".config does not select ${DEV}"
-    grep -q "DEVICE_${BAD}=y" "${OPENWRT_ROOT}/.config" \
-        && err ".config selects ${BAD}"
-    grep -q '^CONFIG_TARGET_ramips_mt7621=y' "${OPENWRT_ROOT}/.config" \
-        || err ".config is not ramips/mt7621"
-    log "Build identity: .config selects ramips/mt7621 ${DEV}"
+    if ! grep -q "^CONFIG_TARGET_ramips_mt7621_DEVICE_${DEV}=y" "${OPENWRT_ROOT}/.config"; then
+        err ".config does not select ${DEV}"
+    elif grep -q "DEVICE_${BAD}=y" "${OPENWRT_ROOT}/.config"; then
+        err ".config selects ${BAD}"
+    elif ! grep -q '^CONFIG_TARGET_ramips_mt7621=y' "${OPENWRT_ROOT}/.config"; then
+        err ".config is not ramips/mt7621"
+    else
+        log "Build identity: .config selects ramips/mt7621 ${DEV}"
+    fi
 else
     log "NOTE: build .config not reachable from image dir; skipping build-identity check"
 fi
