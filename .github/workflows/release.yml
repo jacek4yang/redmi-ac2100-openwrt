@@ -71,10 +71,11 @@ jobs:
             echo
             echo "- \`*-squashfs-kernel1.bin\` + \`*-squashfs-rootfs0.bin\` - initial-flash pair (stock->OpenWrt path)"
             echo "- \`*-squashfs-sysupgrade.bin\` - OpenWrt-to-OpenWrt upgrades"
-            echo "- \`*-initramfs-kernel.bin\` - RAM-only recovery/netboot image"
-            echo "- \`SHA256SUMS\`, \`build-metadata.txt\`, \`config.buildinfo\` (sanitized config seed)"
+            echo "- \`sha256sums\` - upstream-style checksums (verify: \`sha256sum -c sha256sums\`)"
+            echo "- \`build-metadata.txt\`, \`packages.manifest\`, \`profiles.json\` - provenance and resolved package set"
             echo
-            echo "Verify with \`sha256sum -c SHA256SUMS\`."
+            echo "The RAM-only \`*-initramfs-kernel.bin\` is produced by the source-build"
+            echo "pipeline (development artifact), not by this ImageBuilder release flow."
             echo
             echo "Flashing instructions are intentionally not published yet;"
             echo "this repository is in the no-flash validation stage (see README)."

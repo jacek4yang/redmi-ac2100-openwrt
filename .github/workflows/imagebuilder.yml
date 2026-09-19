@@ -61,7 +61,16 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: redmi-ac2100-firmware-smoke-${{ github.sha }}
-          path: work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/
+          # Explicit list, not the whole directory: the bin dir also holds our
+          # uppercase SHA256SUMS next to the ImageBuilder's own lowercase
+          # sha256sums, and shipping both is a filename case-collision on
+          # Windows/macOS. We ship the upstream-style sha256sums.
+          path: |
+            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/*xiaomi_redmi-router-ac2100*
+            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/sha256sums
+            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/build-metadata.txt
+            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/packages.manifest
+            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/profiles.json
           if-no-files-found: error
           retention-days: 7
 
@@ -72,7 +81,16 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: redmi-ac2100-firmware-base-${{ github.sha }}
-          path: work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/
+          # Explicit list, not the whole directory: the bin dir also holds our
+          # uppercase SHA256SUMS next to the ImageBuilder's own lowercase
+          # sha256sums, and shipping both is a filename case-collision on
+          # Windows/macOS. We ship the upstream-style sha256sums.
+          path: |
+            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/*xiaomi_redmi-router-ac2100*
+            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/sha256sums
+            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/build-metadata.txt
+            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/packages.manifest
+            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/profiles.json
           if-no-files-found: error
           retention-days: 14
 
@@ -83,6 +101,15 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: redmi-ac2100-firmware-full-${{ github.sha }}
-          path: work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/
+          # Explicit list, not the whole directory: the bin dir also holds our
+          # uppercase SHA256SUMS next to the ImageBuilder's own lowercase
+          # sha256sums, and shipping both is a filename case-collision on
+          # Windows/macOS. We ship the upstream-style sha256sums.
+          path: |
+            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/*xiaomi_redmi-router-ac2100*
+            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/sha256sums
+            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/build-metadata.txt
+            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/packages.manifest
+            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/profiles.json
           if-no-files-found: error
           retention-days: 14

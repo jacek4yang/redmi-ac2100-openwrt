@@ -104,7 +104,9 @@ is a development-only platform here. Full detail: [docs/build.md](docs/build.md)
 | `*-squashfs-rootfs0.bin` | OpenWrt UBI rootfs image; half of the initial-flash pair (with kernel1) |
 | `*-squashfs-sysupgrade.bin` | combined image for OpenWrt-to-OpenWrt upgrades |
 | `*-initramfs-kernel.bin` | RAM-only image for netboot/recovery scenarios (produced by the source-build pipeline, which owns kernel-level artifacts; `CONFIG_TARGET_ROOTFS_INITRAMFS=y` in base.config) |
-| `SHA256SUMS`, `build-metadata.txt`, `config.buildinfo` | checksums, pinned-revision metadata, sanitized config (diffconfig) |
+| `sha256sums` (ImageBuilder) / `SHA256SUMS` (source-build) | checksums over the shipped files |
+| `build-metadata.txt`, `profiles.json`, `packages.manifest` | pinned-revision provenance, device identity, resolved package set |
+| `config.buildinfo` | sanitized resolved config (diffconfig); source-build artifacts only |
 
 Upstream ships **no factory.bin** for this device (confirmed upstream); the
 device image fragment emits the `kernel1.bin` / `rootfs0.bin` pair instead.
