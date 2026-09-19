@@ -146,12 +146,15 @@ jobs:
       - name: "[CACHE] ccache statistics (evidence, not a failure gate)"
         if: always()
         run: |
-          CCACHE_BIN="$(command -v ccache || true)"
-          [ -n "${CCACHE_BIN}" ] || CCACHE_BIN="work/openwrt/staging_dir/host/bin/ccache"
-          if [ -d work/openwrt/.ccache ] && [ -x "${CCACHE_BIN}" ]; then
-            "${CCACHE_BIN}" -s || true
+          # rules.mk pins the build's cache to $(TOPDIR)/.ccache; read THAT
+          # directory, not ccache's default (~/.cache/ccache). Prefer the
+          # OpenWrt-built ccache for a version match with the build.
+          CCACHE_BIN="work/openwrt/staging_dir/host/bin/ccache"
+          [ -x "${CCACHE_BIN}" ] || CCACHE_BIN="$(command -v ccache || true)"
+          if [ -d work/openwrt/.ccache ] && [ -n "${CCACHE_BIN}" ]; then
+            CCACHE_DIR="${PWD}/work/openwrt/.ccache" "${CCACHE_BIN}" -s || true
           else
-            echo "no ccache dir (${CCACHE_DIR}) or no ccache binary found"
+            echo "no work/openwrt/.ccache directory or no ccache binary found"
           fi
 
       - name: "[MEASURE] disk usage (post-build evidence)"
