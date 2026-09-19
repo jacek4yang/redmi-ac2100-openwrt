@@ -48,35 +48,43 @@ Full detail and evidence per component: [docs/hardware.md](docs/hardware.md).
 
 | Path | Contents |
 | --- | --- |
-| [config/base.config](config/base.config) | minimal device/core config seed (diffconfig format) |
-| [config/performance.config](config/performance.config) | observability + optional-feature layer (flavor `full`) |
+| [config/base.config](config/base.config) | canonical full-Buildroot config seed (source-build pipeline) |
+| [config/packages-base.list](config/packages-base.list) / [config/packages-full.list](config/packages-full.list) | ImageBuilder flavor package lists |
 | [files/etc/uci-defaults/](files/etc/uci-defaults/) | first-boot runtime tuning |
-| [scripts/](scripts/) | prepare / build / verify pipeline + read-only stock-dump inspector |
-| [.github/workflows/](.github/workflows/) | CI-authoritative build, manual-only release flow |
+| [scripts/](scripts/) | imagebuild / prepare / build / verify pipeline + read-only stock-dump inspector |
+| [.github/workflows/](.github/workflows/) | hygiene + ImageBuilder + source-build pipelines, manual-only release flow |
 | [docs/](docs/) | hardware, flash layout, build, performance, IPv6, Tailscale, recovery, benchmarks |
 | `dump-*/` | stock NAND dumps — git-ignored, never committed (policy: [docs/stock-flash-layout.md](docs/stock-flash-layout.md)) |
-| `work/` | OpenWrt buildroot created by prepare.sh — git-ignored |
+| `work/` | build trees created by the scripts — git-ignored |
 
 ## How the build works
 
-CI is authoritative. Firmware builds on GitHub Actions Ubuntu 24.04 via
-[.github/workflows/build.yml](.github/workflows/build.yml):
+CI is authoritative. Three separated pipelines on GitHub Actions Ubuntu 24.04:
 
-1. **Hygiene gate** — [scripts/verify-repo.sh](scripts/verify-repo.sh): no dump
-   data/binaries committable, ignore rules proven, secrets scan, device-identity
-   guard, required-files check.
-2. **Prepare** — clone OpenWrt v25.12.2 shallow, verify the pinned commit,
-   install pinned feeds, seed the flavor config, apply the `files/` overlay.
-3. **Build** — defconfig, resolved-config audit
-   ([scripts/verify-config.sh](scripts/verify-config.sh)), download, make, then
-   [scripts/verify-images.sh](scripts/verify-images.sh) validates artifacts
-   (identity, structure, partition-fit ceilings, `profiles.json` cross-check)
-   and writes `SHA256SUMS`.
-4. **Upload** — images + `SHA256SUMS` + `build-metadata.txt` +
-   `config.buildinfo` + `profiles.json`.
+1. **hygiene** ([hygiene.yml](.github/workflows/hygiene.yml)) — every push/PR:
+   shellcheck, bash syntax, and
+   [scripts/verify-repo.sh](scripts/verify-repo.sh) (no dump data committable,
+   ignore rules proven, secrets scan, device-identity guard).
+2. **imagebuilder** ([imagebuilder.yml](.github/workflows/imagebuilder.yml)) —
+   the user-facing firmware. Uses the **official OpenWrt 25.12.2
+   ImageBuilder** (SHA256-verified against upstream `sha256sums`), so no
+   toolchain/kernel/host-Go compilation ever runs here. Three milestone
+   layers, each producing verified artifacts:
+   `smoke` (profile + defaults + LuCI) → `base` (+ `files/` overlay) →
+   `full` (+ observability/Tailscale/SmartDNS from official precompiled
+   feeds). Runs when image-relevant inputs change.
+3. **source-build** ([source-build.yml](.github/workflows/source-build.yml)) —
+   the full pinned Buildroot for kernel/DTS/patch/initramfs work. One
+   canonical config ([config/base.config](config/base.config)). Manual or
+   source-level path changes only; `cancel-in-progress: false` so a later
+   push never kills a multi-hour build. Stage-separated steps
+   (prepare → defconfig → config audit → download → compile →
+   image-generation check → custom image audit) make the failing layer
+   obvious in the UI.
 
-Steps 2–4 run as a **matrix over both flavors** (`base` and `full`), so CI
-proves the lean fallback and the full image independently.
+Both build pipelines end with [scripts/verify-images.sh](scripts/verify-images.sh)
+(device identity, structure, partition-fit ceilings, `profiles.json`
+cross-check, `SHA256SUMS`).
 
 [.github/workflows/release.yml](.github/workflows/release.yml) runs **only when
 manually dispatched** (`workflow_dispatch`). By default it just rebuilds and
@@ -84,11 +92,9 @@ validates artifacts; it creates a GitHub **prerelease** only when explicitly
 dispatched with `publish_release=true` and a tag. Pushing a `v*` tag triggers
 nothing; nothing is published automatically.
 
-Local Linux builds are optional and use the same entry points
-(`scripts/prepare.sh`, `scripts/build.sh`). Windows is a development-only
-platform here: authoring and dump analysis happen on Windows, but firmware
-builds run on GitHub Actions Ubuntu (or an optional local Linux machine).
-Full detail: [docs/build.md](docs/build.md).
+Local Linux builds are optional (`scripts/prepare.sh` + `scripts/build.sh` for
+source, `scripts/imagebuild.sh <smoke|base|full>` for image flavors). Windows
+is a development-only platform here. Full detail: [docs/build.md](docs/build.md).
 
 ## Artifacts
 
@@ -97,7 +103,7 @@ Full detail: [docs/build.md](docs/build.md).
 | `*-squashfs-kernel1.bin` | OpenWrt kernel image for the `kernel` partition; half of the initial-flash pair (with rootfs0) |
 | `*-squashfs-rootfs0.bin` | OpenWrt UBI rootfs image; half of the initial-flash pair (with kernel1) |
 | `*-squashfs-sysupgrade.bin` | combined image for OpenWrt-to-OpenWrt upgrades |
-| `*-initramfs-kernel.bin` | RAM-only image for netboot/recovery scenarios (explicitly enabled via `CONFIG_TARGET_ROOTFS_INITRAMFS=y` in base.config; validated in CI) |
+| `*-initramfs-kernel.bin` | RAM-only image for netboot/recovery scenarios (produced by the source-build pipeline, which owns kernel-level artifacts; `CONFIG_TARGET_ROOTFS_INITRAMFS=y` in base.config) |
 | `SHA256SUMS`, `build-metadata.txt`, `config.buildinfo` | checksums, pinned-revision metadata, sanitized config (diffconfig) |
 
 Upstream ships **no factory.bin** for this device (confirmed upstream); the
@@ -106,13 +112,18 @@ Flashing instructions are deliberately not published at this stage.
 
 ## Flavors
 
-| Flavor | Config seeds | Contents |
-| --- | --- | --- |
-| `base` | `config/base.config` | device profile + LuCI + PPPoE + IPv6 baseline |
-| `full` (default) | base + `config/performance.config` | + iperf3, tcpdump-mini, ethtool, conntrack, htop, tailscale, smartdns + luci-app-smartdns |
+User-facing flavors are built by the ImageBuilder pipeline (official
+precompiled packages, no recompilation):
 
-Select with `FLAVOR=base|full` (default `full`). Rationale per package:
-[docs/performance.md](docs/performance.md) and the config files themselves.
+| Flavor | Package lists | Contents |
+| --- | --- | --- |
+| `base` | [config/packages-base.list](config/packages-base.list) | official profile defaults + LuCI (PPPoE and the IPv6 stack are already in the OpenWrt default set) |
+| `full` | base + [config/packages-full.list](config/packages-full.list) | + iperf3, tcpdump-mini, ethtool, conntrack, htop, tailscale, smartdns + luci-app-smartdns |
+
+Both flavors apply the `files/` overlay (first-boot runtime tuning). Rationale
+per package: [docs/performance.md](docs/performance.md) and the list files
+themselves. The source-build pipeline compiles exactly one canonical config —
+flavor matrices belong to the ImageBuilder, not to toolchain rebuilds.
 
 ## Documentation
 

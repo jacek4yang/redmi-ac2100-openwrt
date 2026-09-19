@@ -1,180 +1,176 @@
 # Build
 
-Purpose: how firmware images are produced — the CI-authoritative pipeline, the
-optional local Linux build, and the reproducibility guarantees.
+Purpose: how this repository turns pinned upstream OpenWrt into verified Redmi
+Router AC2100 firmware, and how to reproduce it.
 
-Status: pipeline implemented and wired in CI; the project is in the no-flash
-stage, so no build output has been validated on hardware yet.
+Status: redesigned pipeline (hygiene / ImageBuilder / source-build) —
+milestone results are recorded in *CI failure history* below as they land.
 
-## Prerequisites
+## Pipelines at a glance
 
-- **CI (authoritative)**: nothing local; everything runs on GitHub Actions
-  `ubuntu-24.04`.
-- **Local Linux (optional)**: the official OpenWrt build dependency set for
-  Ubuntu 24.04 (confirmed upstream, per the OpenWrt build-system
-  documentation; identical to what CI installs):
+| Workflow | Trigger | Purpose | Typical duration |
+| --- | --- | --- | --- |
+| [hygiene.yml](../.github/workflows/hygiene.yml) | every push + PR | shellcheck, bash syntax, `verify-repo.sh` (secrets/ignores/device identity) | < 1 min |
+| [imagebuilder.yml](../.github/workflows/imagebuilder.yml) | image-relevant changes, PRs, manual | **user-facing firmware** via the official ImageBuilder (no compilation) | minutes |
+| [source-build.yml](../.github/workflows/source-build.yml) | source-level changes, manual | full Buildroot for kernel/DTS/patch/initramfs work | hours |
+| [release.yml](../.github/workflows/release.yml) | **manual only** | optionally publish a prerelease (default: build+validate only) | minutes |
 
-  ```
-  build-essential clang flex bison g++ gawk gcc-multilib g++-multilib \
-  gettext git libncurses5-dev libssl-dev python3-setuptools rsync swig \
-  unzip zlib1g-dev file wget
-  ```
+Path filters keep expensive runs off irrelevant commits: docs-only commits run
+just hygiene; ImageBuilder runs for `config/packages-*.list`, `files/**`,
+`scripts/imagebuild.sh`, `scripts/verify-images.sh`; source-build runs for
+`config/base.config`, `patches/**`, the source-pipeline scripts, or manual
+dispatch. The source build uses `cancel-in-progress: false` so a later push
+can never kill a multi-hour build.
 
-- **Windows**: unsupported as a build host by design. This repository is
-  authored on Windows, but firmware builds run in CI or on a local Linux
-  machine. WSL2 might work but is untested and unsupported; CI is the
-  reference environment.
+## Design rule: ImageBuilder for packages, Buildroot for source
 
-## CI pipeline (authoritative)
+Recompiling GCC/binutils/the kernel/host Go just to change the package set is
+wasteful and was the direct cause of this repository's first CI failure (see
+the history section). So:
 
-[../.github/workflows/build.yml](../.github/workflows/build.yml) runs on pushes
-to `main`, on pull requests, on manual dispatch, and as a reusable workflow
-from release.yml. Two jobs:
+- **Package/rootfs variants are made with the official OpenWrt ImageBuilder**
+  (precompiled packages from the official 25.12.2 feeds; flavors below).
+- **Full Buildroot is kept for source-level work only**: kernel, DTS,
+  `patches/`, driver/PPE development, initramfs production. It builds exactly
+  one canonical config ([../config/base.config](../config/base.config) =
+  device profile + LuCI + initramfs + ccache). No flavor matrix is compiled
+  from source.
 
-1. **hygiene** (5-minute cap) —
-   [../scripts/verify-repo.sh](../scripts/verify-repo.sh): proves no dump
-   data/binaries are committable, proves the `.gitignore` rules, scans for
-   secrets (private keys, Tailscale `tskey-` tokens, NVRAM password values,
-   UCI passwords, real-looking MAC addresses), guards the device identity of
-   the build inputs, and checks that required files exist.
-2. **build** (needs: hygiene, 360-minute cap), as a **matrix over both flavors**
-   (`base` and `full`, `fail-fast: false` so one flavor's failure never hides
-   the other's result):
-   - frees runner disk space (a stock runner had only ~14 GB free — measured
-     in run 35444693304: 14 GB before this step, 42 GB after; run 35438257237
-     had failed 2 h in with golang1.26-host and ppp dying simultaneously, the
-     disk-exhaustion signature later confirmed by this fix). Only unused
-     preinstalled toolchains (dotnet/Android/GHC/docker images/…) are removed,
-     every removal guarded;
-   - installs the official apt dependency set;
-   - restores the two safe caches (below);
-   - `bash scripts/prepare.sh` — shallow-clone OpenWrt v25.12.2, **verify HEAD
-     equals the pinned commit** (hard-fail otherwise), update + install feeds
-     (pinned to exact commits by the tag's `feeds.conf.default`), write
-     `build-metadata.txt`, seed `.config` from the selected flavor, apply the
-     `files/` overlay, apply any `patches/` (none currently);
-   - `bash scripts/build.sh` — `make defconfig`, save `config.buildinfo`
-     (diffconfig), `make download`, `make -j$(nproc)` (on failure the script
-     automatically re-runs with `-j1 V=s` so the exact compiler error lands in
-     the CI log), then
-     [../scripts/verify-images.sh](../scripts/verify-images.sh);
-   - uploads `*xiaomi_redmi-router-ac2100*` images plus `SHA256SUMS`,
-     `build-metadata.txt` and `config.buildinfo` (14-day retention,
-     `if-no-files-found: error`).
+## ImageBuilder pipeline (user-facing firmware)
 
-### Caching policy
+- Archive: `openwrt-imagebuilder-25.12.2-ramips-mt7621.Linux-x86_64.tar.zst`,
+  SHA256-verified against the upstream `sha256sums` before extraction
+  (`c3bc6a9713054e278a8f010ee3b64b280362c3bf753aa291c63fc9cdd2d4d3ce`),
+  cached by that hash. 25.12 uses the **apk** package manager; the
+  ImageBuilder handles it internally.
+- The exact profile is proven at runtime (`make info` must contain
+  `xiaomi_redmi-router-ac2100:`).
+- Driver: [../scripts/imagebuild.sh](../scripts/imagebuild.sh)
+  `<smoke|base|full>`.
 
-Only two paths are cached, both safe by construction:
+Milestones (sequential steps in one job; the failed step names the layer):
 
-| Cache | Key shape | Why it is safe |
+| Milestone | Flavor | Contents |
 | --- | --- | --- |
-| `work/openwrt/dl` (upstream source tarballs) | `openwrt-dl-25.12.2`, shared by both flavors | tarballs are content-fetched and hash-verified by the OpenWrt build system itself; a superset cache is harmless |
-| `work/openwrt/.ccache` | `openwrt-ccache-25.12.2-<flavor>-<run_id>` with per-flavor prefix restore-keys | ccache is content-addressed over preprocessed source; a hit is byte-identical to a fresh compile |
+| A | `smoke` | profile defaults (incl. ppp/ppp-mod-pppoe, odhcp6c, odhcpd-ipv6only, firewall4, dropbear, wpad-basic-mbedtls, kmod-mt7603, kmod-mt7615-firmware) + `luci`; no `files/` overlay |
+| B | `base` | smoke + [../config/packages-base.list](../config/packages-base.list) + `files/` overlay (first-boot tuning) |
+| C | `full` | base + [../config/packages-full.list](../config/packages-full.list) (iperf3, tcpdump-mini, ethtool, conntrack, htop, tailscale, smartdns, luci-app-smartdns) |
 
-Build state (`build_dir/`, `staging_dir/`) is **never cached**: stale object
-trees silently survive config and patch changes, which would make artifacts a
-function of cache history instead of the declared inputs — the opposite of
-reproducibility.
+After each build the script audits the generated `.manifest` (required
+packages present; flavor isolation — e.g. tailscale must not leak into
+smoke/base), then [verify-images.sh](../scripts/verify-images.sh) validates
+the artifacts (see below). `initramfs` is **not** required from this pipeline:
+RAM-bootable images are the source pipeline's job.
 
-### Artifact validation
+## Source-build pipeline (full Buildroot)
+
+For source-level development. Stages are separate named workflow steps so the
+GitHub UI immediately shows which layer failed:
+
+```
+[ENV] -> [DISK] -> deps -> [CLONE+FEEDS] -> [DEFCONFIG] -> [CONFIG VERIFY]
+     -> [DOWNLOAD] -> [COMPILE] -> [IMAGE GENERATION] -> [CUSTOM VERIFY]
+     -> [CACHE] -> [MEASURE] -> upload
+```
+
+- **Pinned upstream**: tag `v25.12.2`, commit-verified to
+  `d266501ad6188cce279a487b1ce61f4f327cd496` by
+  [../scripts/prepare.sh](../scripts/prepare.sh); feeds pinned by the tag's
+  own `feeds.conf.default` (exact commits, recorded into
+  `build-metadata.txt`).
+- **[DISK]**: the runner's free space is measured before/after removing only
+  unused preinstalled toolchains (dotnet/Android/GHC/docker images/…); the job
+  fails fast if < 30 GiB remain. Evidence: see failure history.
+- **[CONFIG VERIFY]**: [verify-config.sh](../scripts/verify-config.sh) audits
+  the resolved `.config` right after `defconfig` (device identity, PPPoE,
+  firewall4, IPv6, LuCI, mt76 radios, initramfs, bloat tripwires) — minutes,
+  not hours, lost on a config mistake.
+- **[DOWNLOAD]**: `make download -j$(nproc)`; then any `dl/` file smaller than
+  1024 bytes is treated as an incomplete download, deleted, and the download
+  retried once (the established OpenWrt-Actions convention); remaining
+  breakage fails the stage.
+- **[COMPILE]**: `make -j$(nproc)`; on failure the build automatically re-runs
+  `make -j1 V=s` so the exact compiler error is in the step log. No opaque
+  retries.
+- **[IMAGE GENERATION]** vs **[CUSTOM VERIFY]**: two separate steps — the
+  first confirms upstream emitted the Redmi artifacts at all, the second runs
+  our audit. A failure is unmistakably attributable to OpenWrt or to us.
+- **[CACHE]**: ccache statistics are printed when present (`work/openwrt/.ccache`;
+  `CONFIG_CCACHE=y` in base.config). Cache benefit is claimed only from
+  observed hits, never assumed.
+- **[MEASURE]**: `df`/`du` evidence for resource tuning.
+- Failure diagnostics (build `logs/`, resolved config) upload as a separate
+  artifact on failure only.
+
+Local equivalent on a Linux machine: `scripts/prepare.sh` then
+`scripts/build.sh`.
+
+## Caching policy
+
+| Cache | Key | Why safe |
+| --- | --- | --- |
+| ImageBuilder tarball | `ib-25.12.2-<upstream sha256>` | content-verified against upstream `sha256sums` on every use |
+| `work/openwrt/dl` | `openwrt-dl-25.12.2` | tarballs are hash-verified by the OpenWrt build system itself |
+| `work/openwrt/.ccache` | `openwrt-ccache-src-25.12.2-<run_id>` + prefix restore | content-addressed compiler cache |
+
+`build_dir/` and `staging_dir/` are **never cached** — stale object trees
+would make artifacts a function of cache history instead of declared inputs.
+
+## Artifact validation
 
 [../scripts/verify-images.sh](../scripts/verify-images.sh) hard-fails when:
+any Mi Router AC2100 artifact exists; a required artifact is missing, empty,
+duplicated, or outside its size window; magic/structure checks fail (kernel1
+and initramfs are uImage, rootfs0 starts with the UBI EC magic, sysupgrade is
+a tar with `CONTROL`/`kernel`/`root` members whose appended metadata names
+`xiaomi,redmi-router-ac2100`); `profiles.json` (when present) disagrees on
+target/arch/device or a recorded sha256. On success it writes `SHA256SUMS` and
+appends artifact names/sizes/hashes to `build-metadata.txt`.
 
-- any `xiaomi_mi-router-ac2100` artifact exists (wrong device — never valid
-  here);
-- a required artifact (`squashfs-kernel1`, `squashfs-rootfs0`,
-  `squashfs-sysupgrade`, `initramfs-kernel`) is missing, empty, duplicated, or
-  outside its size window — floors derive from the official 25.12.2 sizes
-  (confirmed upstream), ceilings from the device partition map:
-  `kernel1 <= 4 MiB` (OpenWrt `kernel` partition), `rootfs0 <= 120320 KiB`
-  (`ubi` span = `IMAGE_SIZE`, also enforced upstream by `check-size`),
-  `sysupgrade` under a documented composition bound, `initramfs-kernel` in a
-  RAM-image sanity window;
-- magic/structure checks fail: kernel1/initramfs must be uImage, rootfs0 must
-  start with the UBI EC magic, sysupgrade must be a tar with `CONTROL`,
-  `kernel`, `root` members whose appended metadata names
-  `xiaomi,redmi-router-ac2100`;
-- the upstream-generated `profiles.json` disagrees (wrong target/arch/device,
-  or a recorded image sha256 mismatches the actual file);
-- the build `.config` (when reachable) does not select the Redmi device
-  profile.
+Size ceilings come from upstream device data, not guesses: `kernel1 <= 4 MiB`
+(the OpenWrt `kernel` partition 0x600000–0xA00000 in
+`mt7621_xiaomi_nand_128m.dtsi`), `rootfs0 <= 120320 KiB` (the `ubi` span =
+`IMAGE_SIZE`, also enforced upstream by `check-size`), sysupgrade bounded by
+the documented composition (kernel + rootfs tar + metadata — it is not written
+to a single physical partition), initramfs within a RAM-image sanity window.
+Floors are conservative fractions of the official 25.12.2 artifact sizes.
 
-On success it writes `SHA256SUMS` over all device `.bin` files and appends
-artifact names/sizes/hashes to `build-metadata.txt`.
-
-The resolved configuration is audited even earlier — right after
-`make defconfig` — by [../scripts/verify-config.sh](../scripts/verify-config.sh)
-(target/device, PPPoE, firewall4, IPv6, odhcp6c/odhcpd, LuCI, mt76 radios,
-initramfs, flavor-gated packages, bloat tripwires).
-
-### Release flow
+## Release flow
 
 [../.github/workflows/release.yml](../.github/workflows/release.yml) is
 **manual-only** (`workflow_dispatch`) — pushing a `v*` tag triggers nothing.
-It reuses build.yml via `workflow_call` to build and validate the release
-artifacts. Only when explicitly dispatched with `publish_release=true` and a
-`tag` input does it create a GitHub **prerelease** with generated notes:
-artifact meanings, checksum verification (`sha256sum -c SHA256SUMS`), build
-metadata, and an explicit statement that flashing instructions are
-intentionally not published yet. Nothing is ever published automatically; a
-human reviews artifacts before any prerelease is marked stable.
-
-## Optional local Linux build
-
-Same entry points as CI:
-
-```
-scripts/prepare.sh          # FLAVOR=full|base (default: full), WORK_DIR=<path> (default: work/openwrt)
-scripts/build.sh            # BUILD_JOBS=<n> (default: nproc), MAKE_V=s for verbose logs
-scripts/verify-images.sh    # standalone re-validation of work/openwrt/bin/targets/ramips/mt7621
-```
-
-prepare.sh is idempotent and refuses to touch an existing checkout whose HEAD
-does not equal the pinned commit.
-
-## Flavors
-
-| Flavor | Seeds | Adds on top of the device defaults |
-| --- | --- | --- |
-| `base` | [../config/base.config](../config/base.config) | device profile, LuCI, ppp + ppp-mod-pppoe, odhcp6c + odhcpd-ipv6only, ccache |
-| `full` (default) | base + [../config/performance.config](../config/performance.config) | iperf3, tcpdump-mini, ethtool, conntrack, htop; tailscale; smartdns + luci-app-smartdns |
-
-Deliberately excluded in every flavor: SQM/cake, irqbalance, samba/dlna/usb,
-wpad-full — rationale in [performance.md](performance.md).
-
-## Patches convention
-
-prepare.sh wires three patch locations (all currently empty — **no patches
-exist**):
-
-| Repo path | Applied to |
-| --- | --- |
-| `patches/openwrt/*.patch` | `git apply` at the buildroot root |
-| `patches/kernel/*.patch` | copied into `target/linux/ramips/patches-6.12/` |
-| `patches/packages/<feed>/<pkg>/*.patch` | copied into `feeds/<feed>/<pkg>/patches/` |
+It reuses imagebuilder.yml via `workflow_call`. Only when explicitly
+dispatched with `publish_release=true` and a `tag` input does it create a
+GitHub **prerelease** from the full-flavor artifacts.
 
 ## Reproducibility notes
 
-| Input | Pin | Evidence |
-| --- | --- | --- |
-| OpenWrt source | commit `d266501ad6188cce279a487b1ce61f4f327cd496` (signed tag `v25.12.2`, tag object `02fe9b4f4872fdb1703f04379fd063c7e27c7aa4`, tagger Hauke Mehrtens, 2026-03-26) | confirmed upstream; prepare.sh hard-fails on any other HEAD |
-| Feed `packages` | `268d92d3d46147efe1e81892e3a618f8bbd4806b` | confirmed upstream (tag's `feeds.conf.default`) |
-| Feed `luci` | `067535eaf51a59582b775a8b588a9b05810f8030` | confirmed upstream |
-| Feed `routing` | `5b23ea12d417e5dba99788c5b34abdae81cccf33` | confirmed upstream |
-| Feed `telephony` | `2618106d5846a4a542fdf5809f0d3ed228ce439b` | confirmed upstream |
-| Feed `video` | `094bf58da6682f895255a35a84349a79dab4bf95` | confirmed upstream |
-| Kernel | 6.12.74 (`KERNEL_PATCHVER=6.12`, `LINUX_VERSION-6.12=.74`; vermagic `e907f034ad3de2d6a38bc36369b413fa` in official profiles.json) | confirmed upstream |
-| Package versions (full flavor) | tailscale 1.94.1, smartdns 46.1 at the pinned feed commits | confirmed upstream |
-| Recorded per build | `build-metadata.txt` (versions, feed HEADs, UTC date), `config.buildinfo` (diffconfig), `SHA256SUMS` | generated artifacts |
+- Upstream is pinned by tag **and** commit; feeds by exact commits; the
+  ImageBuilder by SHA256; GitHub Actions by immutable SHAs.
+- `config.buildinfo` (resolved diffconfig, source pipeline) and
+  `packages.manifest` (exact installed packages, ImageBuilder pipeline) are
+  archived with the artifacts.
+- Build timestamps are metadata only. Bit-for-bit reproducibility between two
+  CI runs is an open question by policy: it will be answered by comparing
+  `SHA256SUMS` of two clean runs and reported honestly, not claimed in
+  advance.
 
-Given the same repository revision, image content is intended to be a pure
-function of these pinned inputs; bit-for-bit identity with the official
-upstream build is not claimed (different config, timestamps and build host).
+## CI failure history
 
-Official upstream reference for this device
-(`downloads.openwrt.org/releases/25.12.2/targets/ramips/mt7621/`, confirmed
-upstream): exactly four images — `initramfs-kernel.bin`,
+Factual record, newest last. "Layer" attributes the failure to the responsible
+stage; none of these were OpenWrt compilation defects.
+
+| Run | Date (UTC) | Layer | Root cause | Resolution |
+| --- | --- | --- | --- | --- |
+| [35438257237](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35438257237) | 2026-09-19 | INFRA (runner disk) | stock runner had ~14 GiB free; `golang1.26` host (tailscale's build-time dependency at the time) and `ppp` failed simultaneously ~2 h in — the disk-exhaustion signature | free-disk-space step + fail-fast disk gate in source-build.yml |
+| [35444693304](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35444693304) | 2026-09-19 | OUR POST-BUILD VALIDATION | OpenWrt compiled through image generation; then `verify-images.sh` was invoked as an executable while committed without the exec bit (Windows checkout) → exit 126 | verifiers invoked via `bash ...`; exec bits set in git (defense in depth) |
+| 35450408204 | 2026-09-19 | (outcome pending at time of writing — not relied upon) | matrix double full-source build (base+full) — the architecture this redesign replaces; allowed to finish on its own, its result changes nothing | replaced by imagebuilder.yml / source-build.yml |
+
+## Official upstream reference artifacts
+
+`downloads.openwrt.org/releases/25.12.2/targets/ramips/mt7621/` (confirmed
+upstream) ships for this device exactly: `initramfs-kernel.bin`,
 `squashfs-kernel1.bin`, `squashfs-rootfs0.bin`, `squashfs-sysupgrade.bin` —
-plus profiles.json reporting supported_devices `xiaomi,redmi-router-ac2100`,
+plus `profiles.json` with `supported_devices: xiaomi,redmi-router-ac2100`,
 version_code `r32802-f505120278`, arch `mipsel_24kc`. **No factory.bin exists
 for this device.**

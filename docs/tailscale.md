@@ -27,9 +27,9 @@ exists for.
 ## What the firmware ships
 
 - Package `tailscale` (version 1.94.1 at the pinned packages feed — confirmed
-  upstream), selected in
-  [../config/performance.config](../config/performance.config) (full flavor
-  only).
+  upstream), listed in
+  [../config/packages-full.list](../config/packages-full.list) (full flavor
+  only) and installed from the official precompiled feed by the ImageBuilder.
 - The init script is present, but the service is **not started and not
   joined**: there is no auth key in the image, no `--auth-key` anywhere, no
   auto-join logic. First boot is dark until you run `tailscale up` yourself.

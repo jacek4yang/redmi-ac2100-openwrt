@@ -59,8 +59,8 @@ package ships in the full flavor.
 
 ## Why SQM is off — and the correct mental model
 
-SQM (cake/fq_codel) is **not installed**
-([../config/performance.config](../config/performance.config)). Fast path and
+SQM (cake/fq_codel) is **not installed** (not in
+[../config/packages-full.list](../config/packages-full.list)). Fast path and
 shaping are mutually exclusive for the same traffic: a hardware-offloaded
 flow never reaches the qdisc, and forcing every packet through the qdisc
 forfeits the PPE fast path (upstream flow-offload semantics). The correct
