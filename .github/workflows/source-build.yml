@@ -36,6 +36,13 @@ jobs:
     name: Full Buildroot (canonical source config)
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    env:
+      # OpenWrt wraps compilers with ccache (CONFIG_CCACHE=y in base.config)
+      # but never sets CCACHE_DIR itself - without this the cache lands in
+      # ~/.cache/ccache, which is NOT the path we cache, and nothing is ever
+      # restored (observed on runs 35452208528/35460747904). Must be absolute:
+      # build steps cd into work/openwrt.
+      CCACHE_DIR: ${{ github.workspace }}/work/openwrt/.ccache
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -146,10 +153,12 @@ jobs:
       - name: "[CACHE] ccache statistics (evidence, not a failure gate)"
         if: always()
         run: |
-          if [ -d work/openwrt/.ccache ]; then
-            CCACHE_DIR=work/openwrt/.ccache ccache -s || true
+          CCACHE_BIN="$(command -v ccache || true)"
+          [ -n "${CCACHE_BIN}" ] || CCACHE_BIN="work/openwrt/staging_dir/host/bin/ccache"
+          if [ -d work/openwrt/.ccache ] && [ -x "${CCACHE_BIN}" ]; then
+            "${CCACHE_BIN}" -s || true
           else
-            echo "no work/openwrt/.ccache directory found"
+            echo "no ccache dir (${CCACHE_DIR}) or no ccache binary found"
           fi
 
       - name: "[MEASURE] disk usage (post-build evidence)"
