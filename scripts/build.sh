@@ -23,6 +23,9 @@ make defconfig
 log "Saving sanitized config (diffconfig) for release metadata"
 ./scripts/diffconfig.sh > "${WORK_DIR}/../config.buildinfo"
 
+log "Auditing resolved .config (fail fast before compiling)"
+bash "${REPO_ROOT}/scripts/verify-config.sh" "${WORK_DIR}" "${FLAVOR:-full}"
+
 log "make download (-j${JOBS})"
 make download -j"${JOBS}"
 
@@ -33,6 +36,6 @@ if ! make ${MAKE_V:+V="${MAKE_V}"} -j"${JOBS}"; then
 fi
 
 log "Verifying generated images"
-"${REPO_ROOT}/scripts/verify-images.sh" "${WORK_DIR}/bin/targets/ramips/mt7621"
+bash "${REPO_ROOT}/scripts/verify-images.sh" "${WORK_DIR}/bin/targets/ramips/mt7621"
 
 log "build.sh done"
