@@ -174,7 +174,17 @@ Milestone evidence (see README for the milestone definitions):
 | Milestone | Run | Result |
 | --- | --- | --- |
 | A–C (ImageBuilder smoke/base/full) | [35453035114](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35453035114) @ ee561a1 | **PASS** (2m53s). All `sha256sums` entries verified locally after download; `kernel1.bin` byte-identical to the official 25.12.2 image (sha256 `6703f033…dcd5`); rootfs/sysupgrade same sizes as official, different hashes (build-time metadata in rootfs assembly — bit-for-bit identity with upstream is not claimed). `full` resolved `tailscale 1.98.3-r1`, `smartdns 46.1-r1`, `luci-app-smartdns`, `iperf3`, `tcpdump-mini`, `ethtool`, `conntrack`, `htop` — all from official precompiled feeds (no host Go compilation). |
-| D–E (source Buildroot, canonical config + initramfs) | [35452208528](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35452208528) @ cc94b69 | **PASS** (53m34s). Emitted `initramfs-kernel.bin` (8,042,958 B), `kernel1` (3,417,262 B), `rootfs0` (6,029,312 B), `sysupgrade` (8,264,263 B); `SHA256SUMS` verified locally after download; feed commits recorded in `build-metadata.txt`. Re-validated on later HEADs as those runs land. |
+| D–E (source Buildroot, canonical config + initramfs) | [35452208528](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35452208528) @ cc94b69 | **PASS** (53m34s). Emitted `initramfs-kernel.bin` (8,042,958 B), `kernel1` (3,417,262 B), `rootfs0` (6,029,312 B), `sysupgrade` (8,264,263 B); `SHA256SUMS` verified locally after download; feed commits recorded in `build-metadata.txt`. |
+| A–C re-validation | [35460747891](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35460747891) @ e157798 | **PASS**. **Reproducibility probe:** the full-flavor `kernel1`/`rootfs0`/`sysupgrade` are **bit-for-bit identical** to the ee561a1 run (two clean runners, ~2.5 h apart). ImageBuilder images are reproducible for identical inputs. |
+| D–E re-validation | [35460747904](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35460747904) @ e157798 | **PASS** (57m23s). First run exercising the cache-restore-after-clone fix on a cache hit; `dl/` cache (567 MB) restored successfully. Disk: 87 GiB free before cleanup → 115 GiB after (gate ≥ 30 GiB) → 104 GiB post-build (`build_dir` 9.1 GiB, `staging_dir` 753 MiB). `kernel1` bit-for-bit identical to the cc94b69 run; `rootfs0`/`sysupgrade`/`initramfs` **differ** — the source Buildroot path is *not* bit-for-bit reproducible across runs (unlike the ImageBuilder path); root cause not yet isolated (candidate: file mtimes in rootfs assembly), tracked as an open question, not claimed. |
+
+Measured CI facts worth knowing:
+
+- ccache before the `CCACHE_DIR` fix: the cache action never stored anything —
+  OpenWrt does not set `CCACHE_DIR` itself, so ccache wrote to
+  `~/.cache/ccache`, outside the cached path. Both green source runs compiled
+  cold (~53–57 min). After the fix, cache hits must be observed in the
+  `[CACHE]` step before any speedup is claimed.
 
 ## Official upstream reference artifacts
 
