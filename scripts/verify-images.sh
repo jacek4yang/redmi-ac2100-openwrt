@@ -66,7 +66,13 @@ if command -v python3 >/dev/null 2>&1; then PY=python3; elif command -v python >
 # source-build pipeline only.
 OPENWRT_ROOT="$(cd "${IMAGE_DIR}/../../../.." 2>/dev/null && pwd || true)"
 if [ -n "${OPENWRT_ROOT}" ] && [ -f "${OPENWRT_ROOT}/.config" ]; then
-    if ! grep -q "^CONFIG_TARGET_ramips_mt7621_DEVICE_${DEV}=y" "${OPENWRT_ROOT}/.config"; then
+    if grep -qE '^(CONFIG_TARGET_MULTI_PROFILE|CONFIG_TARGET_ALL_PROFILES)=y' "${OPENWRT_ROOT}/.config"; then
+        # ImageBuilder/official-style config: every device profile is enabled,
+        # including the Mi Router AC2100. Per-device symbol checks are
+        # meaningless here; identity is proven by artifact names, sysupgrade
+        # metadata, and profiles.json below.
+        log "NOTE: multi-profile (ImageBuilder) .config - per-device symbol check skipped by design"
+    elif ! grep -q "^CONFIG_TARGET_ramips_mt7621_DEVICE_${DEV}=y" "${OPENWRT_ROOT}/.config"; then
         err ".config does not select ${DEV}"
     elif grep -q "DEVICE_${BAD}=y" "${OPENWRT_ROOT}/.config"; then
         err ".config selects ${BAD}"
