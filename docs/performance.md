@@ -23,16 +23,16 @@ First boot applies
 - `firewall.@defaults[0].flow_offloading=1` — software flow offload:
   established flows skip per-packet netfilter fast-path work. Option name and
   semantics confirmed in the pinned firewall4 source (`fw4.uc`
-  `parse_defaults()` at `PKG_SOURCE_VERSION b6e51575`, the rev pinned by
-  v25.12.2).
+  `parse_defaults()` at `PKG_SOURCE_VERSION b6e51575`, unchanged between
+  v25.12.2 and v25.12.5).
 - `firewall.@defaults[0].flow_offloading_hw=1` — hardware flow offload onto
-  the MT7621 PPE (Packet Processing Engine). Evidence at v25.12.2 /
-  kernel 6.12.74: the mt7621 kernel config sets `CONFIG_NET_MEDIATEK_SOC=y`,
-  which builds `mtk_ppe.o` + `mtk_ppe_offload.o` unconditionally
-  (`drivers/net/ethernet/mediatek/Makefile`); `mtk_ppe.c` carries
-  MT7621-specific FOE-table code (`IS_ENABLED(CONFIG_SOC_MT7621)` quirk in
-  `mtk_ppe_init_foe_table()`); and fw4 emits `flowtable ft { ... flags offload }`
-  when the option is set. If the device cannot take hw offload, fw4 logs
+  the MT7621 PPE (Packet Processing Engine). Evidence at v25.12.5 /
+  kernel 6.12.94: MT7621 has exactly one PPE (`mtk_eth_soc.c` `mt7621_data`:
+  `.ppe_num = 1`, `.offload_version = 1`) with a 16384-entry FOE table
+  (`mtk_ppe.h` `MTK_PPE_ENTRIES`); nft flowtable offload hooks in via
+  `TC_SETUP_FT` → `mtk_eth_setup_tc_block` (`mtk_ppe_offload.c`); and fw4
+  emits `flowtable ft { ... flags offload }` when the option is set. If the
+  device cannot take hw offload, fw4 logs
   "Hardware flow offloading unavailable, falling back to software offloading"
   and continues on the software path — so this default fails soft.
 
@@ -50,12 +50,18 @@ What it does **not** accelerate:
 
 - anything that must remain visible to netfilter per-packet — SQM/qdiscs,
   some VPN tunnel paths;
-- IPv6 flow offload behavior on this platform is **not asserted here —
-  requires measurement** (and is moot until native IPv6 exists).
+- fw4 only offloads TCP/UDP forwarded flows (`meta l4proto { tcp, udp } flow
+  offload @ft` in the generated ruleset).
+
+IPv6 offload **is** implemented upstream on this PPE: `mtk_flow_offload_replace`
+maps IPv6 flows to `MTK_PPE_PKT_TYPE_IPV6_ROUTE_5T`, and FOE types include
+IPv6 3T/6RD/DS-LITE (`mtk_ppe.h`). Still requires on-hardware verification —
+and is moot until native IPv6 exists ([ipv6-design.md](ipv6-design.md)).
 
 Operational check once running: offloaded flows show the `[OFFLOAD]` flag (and
 PPE-accelerated flows `[HW_OFFLOAD]`) in `conntrack -L`; the `conntrack`
-package ships in the full flavor.
+package ships in the full flavor. PPE state lives at
+`/sys/kernel/debug/ppe0/entries` (see [../scripts/hw/offload-status.sh](../scripts/hw/offload-status.sh)).
 
 ## Why SQM is off — and the correct mental model
 
@@ -78,19 +84,22 @@ mental model is a **choice**, not a stack:
 (Unset means off in the netifd implementation — the pin only makes the intent
 explicit; LuCI may display/write its own default when its page is saved.)
 
-Evidence at v25.12.2 (all confirmed upstream):
+Evidence at v25.12.5 (all confirmed upstream):
 
 - implementation: `package/network/config/netifd` — `init.d/packet_steering`
   calls `packet-steering.uc`, which writes per-queue
   `rps_cpus`/`rps_flow_cnt` and tasksets threaded-NAPI threads (with an
   `mtk_soc_eth`-specific matcher);
 - **current, open upstream bug**: openwrt/openwrt
-  [issue #24307](https://github.com/openwrt/openwrt/issues/24307) (2026-07,
-  open) — MT7621 `mtk_soc_eth` NETDEV WATCHDOG on TX queue 4 *when packet
-  steering is enabled*;
-- [issue #18901](https://github.com/openwrt/openwrt/issues/18901) (2025-05,
-  open) — packet steering measurably hurts an MT7621 device in the SQM
-  scenario.
+  [issue #24307](https://github.com/openwrt/openwrt/issues/24307) — MT7621
+  `mtk_soc_eth` NETDEV WATCHDOG TX timeout, reproduced on 25.12.5 / 6.12.94.
+  Notably the reporter found **disabling packet steering is NOT a reliable
+  workaround** (recurrence after days) — the suspected race is architectural
+  (16 netdev TX queues over a shared DMA tx_ring). Steering-off is therefore
+  our *conservative* default, not a fix, and this issue is tracked in
+  [known-issues.md](known-issues.md) (K2);
+- [issue #18901](https://github.com/openwrt/openwrt/issues/18901) (open) —
+  packet steering measurably hurts an MT7621 device in the SQM scenario.
 
 So: steering **off by default** as a conservative, evidence-backed choice for
 this SoC — not a claim that off is universally faster. If benchmarks later
@@ -105,14 +114,34 @@ non-determinism. During benchmark runs, record `/proc/interrupts` and
 `/proc/softirqs` deltas ([benchmarks.md](benchmarks.md)) before touching any
 affinity.
 
+Device-specific note from the stock dump: Xiaomi's SDK firmware pins IRQ
+affinity statically (eth0→CPU1, wl0→CPU2, wl1→CPU3) and uses no RPS/XPS at
+all. That is a *hypothesis source* for an experimental affinity variant —
+to be benchmarked on real hardware ([hardware-validation.md](hardware-validation.md) §5),
+never a default copied from a vendor tree.
+
+## DMA / queue architecture (the "QDMA question")
+
+Padavan/SDK trees make a big deal of QDMA. Mainline facts (source-verified):
+`mtk_eth_soc` drives the MT7621 DMA engines directly — the fast path for
+routed flows is the **PPE** (above), which is exactly the silicon the SDK's
+proprietary `hw_nat` also programs; there is no separate performance win
+hiding in a "QDMA mode" we fail to enable. The known weak spot is TX-queue
+accounting under load (#24307, K2 in known-issues). No safe current tunable
+exists here; if A/B shows a DMA-path limitation, the fix would be upstream
+driver work, not a copied setting.
+
 ## conntrack sizing
 
-Kernel defaults are kept. Raise `net.netfilter.nf_conntrack_max` (sysctl)
-**only** when the table actually fills: the symptom is `nf_conntrack: table
-full, dropping packet` in `dmesg`, alongside drop/insert_failed counters in
-`conntrack -S`. This is candidate tuning, not a default; the many-flows
-scenario in [benchmarks.md](benchmarks.md) exists to find out whether the
-default suffices.
+Kernel defaults are kept (16384 entries on this 128 MiB device). Stock
+Xiaomi firmware independently uses the same 16384 (dump evidence:
+`net.netfilter.nf_conntrack_max = 16384`) — two implementations converging
+on the same scale is a reasonable prior, not a proof. Raise
+`net.netfilter.nf_conntrack_max` (sysctl) **only** when the table actually
+fills: the symptom is `nf_conntrack: table full, dropping packet` in
+`dmesg`, alongside drop/insert_failed counters in `conntrack -S`. This is
+candidate tuning, not a default; the many-flows scenario in
+[benchmarks.md](benchmarks.md) exists to find out whether the default suffices.
 
 ## GRO / GSO / TSO
 

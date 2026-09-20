@@ -32,11 +32,31 @@ values, and "expected" numbers are never recorded as results.
 | Repository commit / CI run | NOT TESTED |
 | Image SHA256 (from SHA256SUMS) | NOT TESTED |
 | Flavor (base / full) | NOT TESTED |
-| OpenWrt commit | `d266501ad6188cce279a487b1ce61f4f327cd496` (v25.12.2) |
-| Kernel | 6.12.74 |
+| OpenWrt commit | `f0a60eee2fe051741c643ea6118718aae1ef17fb` (v25.12.5) |
+| Kernel | 6.12.94 |
 | `flow_offloading` / `flow_offloading_hw` | NOT TESTED |
 | WAN type (DHCP / PPPoE) | NOT TESTED |
 | Wi-Fi channel / width / country | NOT TESTED |
+
+## Acceptance targets (the bar a "good" result must clear)
+
+Production requirement is a sustained 200 Mbps+ PPPoE service. Full
+hierarchy with per-level pass criteria: [hardware-validation.md §6](hardware-validation.md).
+
+| Level | Target | How proven |
+| --- | --- | --- |
+| L3 wired PPPoE+NAT | ≥ 95 % of provisioned line (≥ 190 Mbps on an exactly-200 Mbps service), sustained, no single thread pegged, in `hw` mode | PPPoE-lab A/B/C scenario below + 30-min sustained run |
+| L4 Wi-Fi 5 GHz | carries the WAN rate; engineering target ≥ 250 Mbps median local TCP (2x2 AC client, clean 80 MHz channel) | 5 GHz scenario below |
+| L5 stress | concurrent flows/reconnects stable; no conntrack/PPE exhaustion | conntrack stress + pppoe cycles |
+| L6 soak | 30 min → 2 h → 8 h → 24 h → 72 h, zero anomalies | soak-monitor stages |
+
+Reference points from public measurements (NOT our results, labeled
+ANECDOTAL/upstream-reported; treat as orientation only): MT7621 with hw
+offload + the 23.05-era dual-GMAC change reached ~900 Mbps-class routed
+throughput in arinc9's tests (RM2100 was on the tested-device list);
+software-only PPPoE on MT7621 lands in the ~200–400 Mbps range; RM2100
+5 GHz real-world reports are ~500 Mbps-class. All are pre-25.12 data —
+our own numbers replace them once measured.
 
 ## What to record (every scenario)
 
