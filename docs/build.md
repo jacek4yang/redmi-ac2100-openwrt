@@ -150,10 +150,24 @@ GitHub **prerelease** from the full-flavor artifacts.
 - `config.buildinfo` (resolved diffconfig, source pipeline) and
   `packages.manifest` (exact installed packages, ImageBuilder pipeline) are
   archived with the artifacts.
-- Build timestamps are metadata only. Bit-for-bit reproducibility between two
-  CI runs is an open question by policy: it will be answered by comparing
-  `SHA256SUMS` of two clean runs and reported honestly, not claimed in
-  advance.
+- Build timestamps are metadata only. Reproducibility status, measured:
+  **ImageBuilder artifacts are bit-for-bit reproducible** for identical inputs
+  (proven across two clean CI runs, ee561a1 vs e157798). **Source-Buildroot
+  artifacts are not**, and the cause is fully identified (2026-09-20, per-file
+  squashfs comparison of runs 35452208528 vs 35460747904 — 1201 entries, zero
+  path and zero metadata diffs, exactly five content diffs):
+  1. `/etc/apk/keys/public-key.pem` — a fresh EC P-256 keypair is generated
+     per build tree (`rules.mk` `BUILD_KEY_APK_PUB=$(TOPDIR)/public-key.pem`;
+     every clean CI clone creates a new `key-build`),
+  2. `/lib/apk/db/installed` and `/lib/apk/db/scripts.tar.gz` — the apk
+     database referencing that key,
+  3. `/usr/bin/apk` — exactly 2 differing bytes: the gzip mtime of an
+     embedded archive member,
+  4. `/usr/lib/libnftables.so.1.1.0` — build-stamp variance, **fixed upstream
+     by `8be3ba900e` (present since 25.12.3)**.
+  The per-build apk signing key is by design (it signs locally-built
+  packages); everything else in the rootfs, including all file mtimes, is
+  deterministic. Not a defect; no action planned beyond documenting it.
 
 ## CI failure history
 
@@ -179,6 +193,8 @@ Milestone evidence (see README for the milestone definitions):
 | D–E re-validation | [35460747904](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35460747904) @ e157798 | **PASS** (57m23s). First run exercising the cache-restore-after-clone fix on a cache hit; `dl/` cache (567 MB) restored successfully. Disk: 87 GiB free before cleanup → 115 GiB after (gate ≥ 30 GiB) → 104 GiB post-build (`build_dir` 9.1 GiB, `staging_dir` 753 MiB). `kernel1` bit-for-bit identical to the cc94b69 run; `rootfs0`/`sysupgrade`/`initramfs` **differ** — the source Buildroot path is *not* bit-for-bit reproducible across runs (unlike the ImageBuilder path); root cause not yet isolated (candidate: file mtimes in rootfs assembly), tracked as an open question, not claimed. |
 | D–E + ccache enablement | [35466252661](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35466252661) @ 4286bb4 | **PASS** (48m02s, cold). First build with ccache actually active (`CONFIG_DEVEL=y` + `CONFIG_CCACHE=y` survived defconfig, asserted by the new seed-survival check); cache populated and saved (key `openwrt-ccache-src-25.12.2-35466252661`). |
 | D–E warm-cache validation | [35468829805](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35468829805) @ 42c0a91 | **PASS** (34m32s). ccache restored from the cold run's key (160 MB); **observed hits: 21065/37558 (56.09%)**, cache 0.6/5.0 GiB. Cold→warm: 48m02s → 34m32s on a single warm sample (~28% faster; one observation, not a benchmark). Artifact `SHA256SUMS` verified locally after download; feed commits identical to the cc94b69 run. |
+| A–C @ 25.12.5 (upgrade gate) | [35481090393](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35481090393) @ 8d20da4 | **PASS** (2m33s). All `sha256sums` verified locally; full-flavor `kernel1.bin` **byte-identical to the official 25.12.5 image** (`7241d285…1425`); `tailscale 1.98.3-r1`, `smartdns 46.1-r1` from precompiled feeds. |
+| D–E @ 25.12.5 (upgrade gate) | [35481090400](https://github.com/jacek4yang/redmi-ac2100-openwrt/actions/runs/35481090400) @ 8d20da4 | **PASS** (63m20s, cold ccache on the new kernel). Emitted `initramfs-kernel.bin` (8,015,565 B), `kernel1` (3,423,236 B), `rootfs0` (5,898,240 B), `sysupgrade` (8,202,823 B); `SHA256SUMS` verified locally; new feed commits recorded (`packages 5caa62e0…`, `luci 128a7812…`, `routing 3d7d0dc7…`). Source-path `kernel1` differs from official as expected (canonical config ≠ default config); the IB path matches official bit-for-bit. |
 
 Measured CI facts worth knowing:
 

@@ -18,9 +18,10 @@ uci commit firewall
 
 # --- Packet steering: explicitly left OFF ------------------------------------
 # CONFIG/unset default is off; we pin '0' to make the intent explicit.
-# Rationale in docs/performance.md (MT7621 RPS/packet-steering has a history
-# of latency spikes and NIC stalls under load on dual-core MT7621; the
-# ethernet driver already spreads RX processing via NAPI on both cores).
+# Rationale in docs/performance.md: open openwrt/openwrt#24307 shows MT7621
+# TX-queue watchdog trouble in this area; steering-off is the conservative
+# posture (it is not a fix - the issue can recur regardless), and stock
+# Xiaomi ships no RPS/steering either (dump evidence).
 uci set network.globals.packet_steering='0'
 uci commit network
 

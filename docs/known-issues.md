@@ -88,14 +88,28 @@ GitHub API.
 
 ## K8 — Source Buildroot images are not bit-for-bit reproducible
 
-- **Status:** open question (ours, not upstream)
-- **Evidence:** two clean CI runs of the same pinned commit produce identical
-  `kernel1` but differing `rootfs0`/`sysupgrade`/`initramfs` hashes
-  (docs/build.md milestone table). ImageBuilder artifacts ARE bit-for-bit
-  reproducible for identical inputs.
-- **Our exposure:** auditability only; no functional impact.
-- **Next step:** diff two differing rootfs images to isolate (file mtimes vs
-  metadata). Not blocking hardware validation.
+- **Status:** root cause identified (2026-09-20); not a defect, no action
+- **Evidence:** per-file squashfs comparison of two clean source-build runs
+  (35452208528 vs 35460747904, same pinned commit/config): 1201 rootfs
+  entries, **zero path diffs, zero metadata diffs** (mtimes normalized),
+  exactly **five content diffs**:
+  1. `/etc/apk/keys/public-key.pem` — fresh EC P-256 keypair per build tree
+     (`rules.mk:295-297`: `BUILD_KEY_APK_PUB=$(TOPDIR)/public-key.pem`; each
+     clean CI clone generates a new `key-build`),
+  2. `/lib/apk/db/installed`, 3. `/lib/apk/db/scripts.tar.gz` — apk database
+     entries tied to that key,
+  4. `/usr/bin/apk` — exactly 2 differing bytes (gzip mtime of an embedded
+     archive member),
+  5. `/usr/lib/libnftables.so.1.1.0` — build-stamp variance, **fixed upstream
+     by `8be3ba900e` (25.12.3+, i.e. in our current 25.12.5 pin)**.
+- **Interpretation:** image content is deterministic except for the per-build
+  apk signing key (by design, signs locally-built packages) and a 2-byte
+  timestamp. `kernel1` is bit-for-bit reproducible across runs; the
+  ImageBuilder pipeline is bit-for-bit reproducible end-to-end.
+- **Our exposure:** auditability nuance only; no functional impact.
+- **Remaining action:** none required. If full source-path bit-reproducibility
+  is ever wanted, the path is pinning/reusing `key-build` — deliberately not
+  done (a pinned signing key in a public repo would be worse, not better).
 
 ## K9 — Historical (closed upstream, listed for completeness)
 
