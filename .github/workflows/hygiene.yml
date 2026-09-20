@@ -25,11 +25,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends shellcheck
-          shellcheck -S warning scripts/*.sh
+          shellcheck -S warning scripts/*.sh scripts/hw/*.sh
 
       - name: Bash syntax check
         run: |
-          for f in scripts/*.sh files/etc/uci-defaults/*; do
+          for f in scripts/*.sh scripts/hw/*.sh files/etc/uci-defaults/*; do
             bash -n "$f" || exit 1
           done
           echo "syntax OK"
