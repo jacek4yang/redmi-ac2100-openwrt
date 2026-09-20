@@ -3,10 +3,15 @@
 Custom OpenWrt firmware for the Xiaomi Redmi Router AC2100, built as a thin,
 auditable customization layer on top of a pinned upstream OpenWrt release.
 
-Status: no-flash validation stage. Images are unbuilt and untested on hardware;
-no device has ever been flashed from this repository, and the benchmark plan is
-pending real hardware (see [docs/benchmarks.md](docs/benchmarks.md) and
-[docs/recovery.md](docs/recovery.md)).
+**Stability stage: BUILD-VERIFIED** (of BUILD-VERIFIED → RAM-BOOT-VERIFIED →
+HARDWARE-VALIDATED → PERFORMANCE-VALIDATED → SOAK-VALIDATED →
+RELEASE-CANDIDATE). Images build reproducibly in CI and pass structural
+verification; no device has ever been flashed or even RAM-booted from this
+repository, and no performance or stability claim has been measured yet. The
+prepared hardware-validation procedure lives in
+[docs/hardware-validation.md](docs/hardware-validation.md); the benchmark
+methodology (all results `NOT TESTED`) in
+[docs/benchmarks.md](docs/benchmarks.md).
 
 > **Model warning.** This firmware targets the **Xiaomi Redmi Router AC2100**
 > (the six-antenna Redmi model, board name RM2100). It is **not** the Xiaomi
@@ -19,11 +24,12 @@ pending real hardware (see [docs/benchmarks.md](docs/benchmarks.md) and
 
 | Item | Value | Evidence |
 | --- | --- | --- |
-| OpenWrt release | v25.12.2 | confirmed upstream |
-| Pinned commit | `d266501ad6188cce279a487b1ce61f4f327cd496` | confirmed upstream (signed tag object `02fe9b4f4872fdb1703f04379fd063c7e27c7aa4`, tagger Hauke Mehrtens, 2026-03-26) |
+| OpenWrt release | v25.12.5 | confirmed upstream (newest 25.12.x as of 2026-09-20) |
+| Pinned commit | `f0a60eee2fe051741c643ea6118718aae1ef17fb` | confirmed upstream (tag `v25.12.5`) |
 | Target / device | `ramips/mt7621`, `xiaomi_redmi-router-ac2100` | confirmed upstream |
-| Kernel | 6.12.74 (ramips `KERNEL_PATCHVER=6.12`) | confirmed upstream |
+| Kernel | 6.12.94 (ramips `KERNEL_PATCHVER=6.12`) | confirmed upstream |
 | Feeds | exact commits from the tag's `feeds.conf.default` | confirmed upstream; table in [docs/build.md](docs/build.md) |
+| Upgrade rationale | 25.12.2 → 25.12.5: critical odhcpd/dnsmasq CVEs, mt7621 reset-hang fix, kernel 6.12.94 | 249-commit compare; DTS/image recipe byte-identical |
 
 This repository contains only the customization layer. OpenWrt itself is
 cloned and commit-verified by [scripts/prepare.sh](scripts/prepare.sh) into
@@ -66,7 +72,7 @@ CI is authoritative. Three separated pipelines on GitHub Actions Ubuntu 24.04:
    [scripts/verify-repo.sh](scripts/verify-repo.sh) (no dump data committable,
    ignore rules proven, secrets scan, device-identity guard).
 2. **imagebuilder** ([imagebuilder.yml](.github/workflows/imagebuilder.yml)) —
-   the user-facing firmware. Uses the **official OpenWrt 25.12.2
+   the user-facing firmware. Uses the **official OpenWrt 25.12.5
    ImageBuilder** (SHA256-verified against upstream `sha256sums`), so no
    toolchain/kernel/host-Go compilation ever runs here. Three milestone
    layers, each producing verified artifacts:

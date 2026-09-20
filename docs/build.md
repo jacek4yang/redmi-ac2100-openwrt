@@ -29,7 +29,7 @@ wasteful and was the direct cause of this repository's first CI failure (see
 the history section). So:
 
 - **Package/rootfs variants are made with the official OpenWrt ImageBuilder**
-  (precompiled packages from the official 25.12.2 feeds; flavors below).
+  (precompiled packages from the official 25.12.5 feeds; flavors below).
 - **Full Buildroot is kept for source-level work only**: kernel, DTS,
   `patches/`, driver/PPE development, initramfs production. It builds exactly
   one canonical config ([../config/base.config](../config/base.config) =
@@ -38,7 +38,7 @@ the history section). So:
 
 ## ImageBuilder pipeline (user-facing firmware)
 
-- Archive: `openwrt-imagebuilder-25.12.2-ramips-mt7621.Linux-x86_64.tar.zst`,
+- Archive: `openwrt-imagebuilder-25.12.5-ramips-mt7621.Linux-x86_64.tar.zst`,
   SHA256-verified against the upstream `sha256sums` before extraction
   (`c3bc6a9713054e278a8f010ee3b64b280362c3bf753aa291c63fc9cdd2d4d3ce`),
   cached by that hash. 25.12 uses the **apk** package manager; the
@@ -73,7 +73,7 @@ GitHub UI immediately shows which layer failed:
      -> [CACHE] -> [MEASURE] -> upload
 ```
 
-- **Pinned upstream**: tag `v25.12.2`, commit-verified to
+- **Pinned upstream**: tag `v25.12.5`, commit-verified to
   `d266501ad6188cce279a487b1ce61f4f327cd496` by
   [../scripts/prepare.sh](../scripts/prepare.sh); feeds pinned by the tag's
   own `feeds.conf.default` (exact commits, recorded into
@@ -109,9 +109,9 @@ Local equivalent on a Linux machine: `scripts/prepare.sh` then
 
 | Cache | Key | Why safe |
 | --- | --- | --- |
-| ImageBuilder tarball | `ib-25.12.2-<upstream sha256>` | content-verified against upstream `sha256sums` on every use |
-| `work/openwrt/dl` | `openwrt-dl-25.12.2` | tarballs are hash-verified by the OpenWrt build system itself |
-| `work/openwrt/.ccache` | `openwrt-ccache-src-25.12.2-<run_id>` + prefix restore | content-addressed compiler cache |
+| ImageBuilder tarball | `ib-25.12.5-<upstream sha256>` | content-verified against upstream `sha256sums` on every use |
+| `work/openwrt/dl` | `openwrt-dl-25.12.5` | tarballs are hash-verified by the OpenWrt build system itself |
+| `work/openwrt/.ccache` | `openwrt-ccache-src-25.12.5-<run_id>` + prefix restore | content-addressed compiler cache |
 
 `build_dir/` and `staging_dir/` are **never cached** — stale object trees
 would make artifacts a function of cache history instead of declared inputs.
@@ -133,7 +133,7 @@ Size ceilings come from upstream device data, not guesses: `kernel1 <= 4 MiB`
 `IMAGE_SIZE`, also enforced upstream by `check-size`), sysupgrade bounded by
 the documented composition (kernel + rootfs tar + metadata — it is not written
 to a single physical partition), initramfs within a RAM-image sanity window.
-Floors are conservative fractions of the official 25.12.2 artifact sizes.
+Floors are conservative fractions of the official 25.12.5 artifact sizes.
 
 ## Release flow
 
@@ -198,7 +198,7 @@ Measured CI facts worth knowing:
 
 ## Official upstream reference artifacts
 
-`downloads.openwrt.org/releases/25.12.2/targets/ramips/mt7621/` (confirmed
+`downloads.openwrt.org/releases/25.12.5/targets/ramips/mt7621/` (confirmed
 upstream) ships for this device exactly: `initramfs-kernel.bin`,
 `squashfs-kernel1.bin`, `squashfs-rootfs0.bin`, `squashfs-sysupgrade.bin` —
 plus `profiles.json` with `supported_devices: xiaomi,redmi-router-ac2100`,

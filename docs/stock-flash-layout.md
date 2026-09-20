@@ -1,7 +1,7 @@
 # Stock flash layout
 
 Purpose: the authoritative reference for the RM2100 stock NAND layout, its UBI
-structure, the bootloader and boot flags, and how OpenWrt v25.12.2 maps onto
+structure, the bootloader and boot flags, and how OpenWrt v25.12.5 maps onto
 the same flash.
 
 Status: confirmed from the 2026-09-19 dump (all static partitions verified
@@ -165,7 +165,7 @@ inspect-stock.ps1):
   exactly the kind of stock leftover that must not persist — one more reason
   stock firmware should not stay on the device.
 
-## How OpenWrt v25.12.2 maps onto the same NAND
+## How OpenWrt v25.12.5 maps onto the same NAND
 
 From `mt7621_xiaomi_redmi-router-ac2100.dts` (which includes
 `mt7621_xiaomi_router-ac2100.dtsi`, which includes

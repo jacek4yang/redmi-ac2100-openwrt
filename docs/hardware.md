@@ -3,7 +3,7 @@
 Purpose: exact hardware identity of the supported device, plus the evidence
 behind every component claim.
 
-Status: analysis complete (2026-09-19 stock dump + upstream OpenWrt v25.12.2
+Status: analysis complete (2026-09-19 stock dump + upstream OpenWrt v25.12.5
 sources); no lab measurements yet.
 
 ## Model identity
@@ -25,9 +25,9 @@ sources); no lab measurements yet.
 | SoC | MediaTek MT7621A, dual-core MIPS 1004Kc V2.15, 2 cores / 4 threads, 880 MHz | confirmed from dump (stock `/proc/cpuinfo`: 4x MIPS 1004Kc V2.15; 880 MHz per stock system info) |
 | RAM | 128 MiB DDR3 (124024 kB MemTotal visible to the OS) | confirmed from dump (`/proc/meminfo`; DDR3 per stock system info) |
 | NAND flash | 128 MiB; the mtd0 "ALL" window covers 0x0–0x7F80000 (127.5 MiB) | confirmed from dump (`/proc/mtd`, mtd0 size); full layout: [stock-flash-layout.md](stock-flash-layout.md) |
-| Ethernet switch | MT7530 gigabit switch, 1x WAN + 3x LAN (`lan1`-`lan3` on switch ports 2-4, `wan` on gmac1) | confirmed upstream (v25.12.2 `mt7621_xiaomi_router-ac2100.dtsi` `&switch0`/`&gmac1`) |
-| Wi-Fi 2.4 GHz | MediaTek MT7603EN (802.11n, 2 spatial streams — chip capability); on `pcie1`, EEPROM from Factory offset 0x0000 (signature `0x7603`) | confirmed from dump (Factory signatures) + upstream (`kmod-mt7603` in device profile; v25.12.2 dtsi `&pcie1` nvmem `eeprom_factory_0`, freq-limit 2.4-2.5 GHz) |
-| Wi-Fi 5 GHz | MediaTek MT7615N (802.11ac, 4 spatial streams — chip capability); on `pcie0`, EEPROM from Factory offset 0x8000 (signature `0x7615`) | confirmed from dump (Factory signatures) + upstream (`kmod-mt7615-firmware` in device profile; v25.12.2 dtsi `&pcie0` nvmem `eeprom_factory_8000`, freq-limit 5-6 GHz) |
+| Ethernet switch | MT7530 gigabit switch, 1x WAN + 3x LAN (`lan1`-`lan3` on switch ports 2-4, `wan` on gmac1) | confirmed upstream (v25.12.5 `mt7621_xiaomi_router-ac2100.dtsi` `&switch0`/`&gmac1`) |
+| Wi-Fi 2.4 GHz | MediaTek MT7603EN (802.11n, 2 spatial streams — chip capability); on `pcie1`, EEPROM from Factory offset 0x0000 (signature `0x7603`) | confirmed from dump (Factory signatures) + upstream (`kmod-mt7603` in device profile; v25.12.5 dtsi `&pcie1` nvmem `eeprom_factory_0`, freq-limit 2.4-2.5 GHz) |
+| Wi-Fi 5 GHz | MediaTek MT7615N (802.11ac, 4 spatial streams — chip capability); on `pcie0`, EEPROM from Factory offset 0x8000 (signature `0x7615`) | confirmed from dump (Factory signatures) + upstream (`kmod-mt7615-firmware` in device profile; v25.12.5 dtsi `&pcie0` nvmem `eeprom_factory_8000`, freq-limit 5-6 GHz) |
 | Antennas | 6 external antennas | product identity of the RM2100 model |
 | LEDs | status amber (GPIO 6), status white (GPIO 8), WAN amber (GPIO 10), WAN white (GPIO 12) | confirmed upstream (DTS) |
 | Button | reset (GPIO 18) | confirmed upstream (DTS) |

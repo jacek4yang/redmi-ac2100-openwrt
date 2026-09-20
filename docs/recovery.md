@@ -61,7 +61,7 @@ the board serial number, and unit-unique calibration data (policy:
   layout, neither must ever be erased — and their contents must never be
   published.
 
-## How OpenWrt v25.12.2 uses the flash (confirmed upstream)
+## How OpenWrt v25.12.5 uses the flash (confirmed upstream)
 
 - Stock **kernel0 is preserved** in place as `kernel_stock`
   (0x200000–0x600000).
