@@ -1,6 +1,6 @@
 name: imagebuilder
 
-# User-facing firmware is produced here from the OFFICIAL OpenWrt 25.12.2
+# User-facing firmware is produced here from the OFFICIAL OpenWrt 25.12.5
 # ImageBuilder: precompiled packages, no toolchain/kernel compilation.
 # Milestones run sequentially in one job (each takes minutes) so a failing
 # layer is obvious from the failed step name:
@@ -51,8 +51,8 @@ jobs:
       - name: Cache official ImageBuilder tarball (keyed by upstream SHA256)
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          path: work/openwrt-imagebuilder-25.12.2-ramips-mt7621.Linux-x86_64.tar.zst
-          key: ib-25.12.2-c3bc6a9713054e278a8f010ee3b64b280362c3bf753aa291c63fc9cdd2d4d3ce
+          path: work/openwrt-imagebuilder-25.12.5-ramips-mt7621.Linux-x86_64.tar.zst
+          key: ib-25.12.5-e825abe3659d510320ca7e5daf3b9471ca214208fe7bb90c4c6e2ed0a708fa07
 
       - name: "[A] smoke: profile + default packages + LuCI"
         run: bash scripts/imagebuild.sh smoke
@@ -66,11 +66,11 @@ jobs:
           # sha256sums, and shipping both is a filename case-collision on
           # Windows/macOS. We ship the upstream-style sha256sums.
           path: |
-            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/*xiaomi_redmi-router-ac2100*
-            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/sha256sums
-            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/build-metadata.txt
-            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/packages.manifest
-            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/profiles.json
+            work/imagebuilder/25.12.5/bin/targets/ramips/mt7621/*xiaomi_redmi-router-ac2100*
+            work/imagebuilder/25.12.5/bin/targets/ramips/mt7621/sha256sums
+            work/imagebuilder/25.12.5/bin/targets/ramips/mt7621/build-metadata.txt
+            work/imagebuilder/25.12.5/bin/targets/ramips/mt7621/packages.manifest
+            work/imagebuilder/25.12.5/bin/targets/ramips/mt7621/profiles.json
           if-no-files-found: error
           retention-days: 7
 
@@ -86,11 +86,11 @@ jobs:
           # sha256sums, and shipping both is a filename case-collision on
           # Windows/macOS. We ship the upstream-style sha256sums.
           path: |
-            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/*xiaomi_redmi-router-ac2100*
-            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/sha256sums
-            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/build-metadata.txt
-            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/packages.manifest
-            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/profiles.json
+            work/imagebuilder/25.12.5/bin/targets/ramips/mt7621/*xiaomi_redmi-router-ac2100*
+            work/imagebuilder/25.12.5/bin/targets/ramips/mt7621/sha256sums
+            work/imagebuilder/25.12.5/bin/targets/ramips/mt7621/build-metadata.txt
+            work/imagebuilder/25.12.5/bin/targets/ramips/mt7621/packages.manifest
+            work/imagebuilder/25.12.5/bin/targets/ramips/mt7621/profiles.json
           if-no-files-found: error
           retention-days: 14
 
@@ -106,10 +106,10 @@ jobs:
           # sha256sums, and shipping both is a filename case-collision on
           # Windows/macOS. We ship the upstream-style sha256sums.
           path: |
-            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/*xiaomi_redmi-router-ac2100*
-            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/sha256sums
-            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/build-metadata.txt
-            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/packages.manifest
-            work/imagebuilder/25.12.2/bin/targets/ramips/mt7621/profiles.json
+            work/imagebuilder/25.12.5/bin/targets/ramips/mt7621/*xiaomi_redmi-router-ac2100*
+            work/imagebuilder/25.12.5/bin/targets/ramips/mt7621/sha256sums
+            work/imagebuilder/25.12.5/bin/targets/ramips/mt7621/build-metadata.txt
+            work/imagebuilder/25.12.5/bin/targets/ramips/mt7621/packages.manifest
+            work/imagebuilder/25.12.5/bin/targets/ramips/mt7621/profiles.json
           if-no-files-found: error
           retention-days: 14

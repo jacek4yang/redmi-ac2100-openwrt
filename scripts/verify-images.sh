@@ -21,9 +21,9 @@ DEV_DTS="xiaomi,redmi-router-ac2100"
 BAD="xiaomi_mi-router-ac2100"
 
 # ---- Size limits (bytes) ---------------------------------------------------------
-# Floors: conservative fractions of the official 25.12.2 images
+# Floors: conservative fractions of the official 25.12.5 images
 #   (kernel1 3.3 MB, rootfs0 6.0 MB, sysupgrade 8.2 MB).
-# Ceilings are device-authoritative, from OpenWrt v25.12.2
+# Ceilings are device-authoritative, from OpenWrt v25.12.5
 #   target/linux/ramips/dts/mt7621_xiaomi_nand_128m.dtsi and mt7621.mk:
 #   - kernel1.bin -> OpenWrt "kernel" partition 0x600000-0xA00000 = 4 MiB
 #   - rootfs0.bin -> "ubi" span 0xA00000-0x7F80000 = 120320 KiB (= IMAGE_SIZE,

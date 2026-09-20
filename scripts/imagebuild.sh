@@ -4,7 +4,7 @@
 # Usage:  scripts/imagebuild.sh <smoke|base|full>
 #
 # No source compilation happens here: the ImageBuilder links official
-# precompiled 25.12.2 packages into the official image recipes. The tarball is
+# precompiled 25.12.5 packages into the official image recipes. The tarball is
 # SHA256-verified against the upstream sha256sums before extraction.
 #
 #   smoke = Milestone A: default profile packages + luci, no files/ overlay
@@ -12,10 +12,10 @@
 #   full  = Milestone C: base  + config/packages-full.list
 set -euo pipefail
 
-OPENWRT_VERSION="25.12.2"
+OPENWRT_VERSION="25.12.5"
 IB_NAME="openwrt-imagebuilder-${OPENWRT_VERSION}-ramips-mt7621.Linux-x86_64"
-# From https://downloads.openwrt.org/releases/25.12.2/targets/ramips/mt7621/sha256sums
-IB_SHA256="c3bc6a9713054e278a8f010ee3b64b280362c3bf753aa291c63fc9cdd2d4d3ce"
+# From https://downloads.openwrt.org/releases/25.12.5/targets/ramips/mt7621/sha256sums
+IB_SHA256="e825abe3659d510320ca7e5daf3b9471ca214208fe7bb90c4c6e2ed0a708fa07"
 IB_URL="https://downloads.openwrt.org/releases/${OPENWRT_VERSION}/targets/ramips/mt7621/${IB_NAME}.tar.zst"
 PROFILE="xiaomi_redmi-router-ac2100"
 
@@ -115,7 +115,7 @@ stage "IB-METADATA"
     echo "imagebuilder_sha256=${IB_SHA256}"
     echo "profile=${PROFILE}"
     echo "flavor=${FLAVOR}"
-    echo "packages_source=official precompiled 25.12.2 feeds (no source compilation)"
+    echo "packages_source=official precompiled 25.12.5 feeds (no source compilation)"
     echo "packages=${PACKAGES}"
     echo "build_date_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "${BIN_DIR}/build-metadata.txt"

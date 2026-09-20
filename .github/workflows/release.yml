@@ -61,7 +61,7 @@ jobs:
       - name: Generate release notes
         run: |
           {
-            echo "Custom OpenWrt 25.12.2 firmware for **Xiaomi Redmi Router AC2100**"
+            echo "Custom OpenWrt 25.12.5 firmware for **Xiaomi Redmi Router AC2100**"
             echo "(the six-antenna Redmi model - **NOT** Xiaomi Mi Router AC2100)."
             echo
             echo "## Artifacts"

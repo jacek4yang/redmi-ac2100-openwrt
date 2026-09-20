@@ -1,6 +1,6 @@
 # Full flavor = packages-base.list + this file.
 # Extra packages for observability and opt-in features. All come from the
-# official precompiled 25.12.2 feeds (no source compilation, no host Go).
+# official precompiled 25.12.5 feeds (no source compilation, no host Go).
 #
 # Runtime tuning is NOT a package matter: first-boot UCI defaults live in
 # files/etc/uci-defaults/99-redmi-ac2100-tuning (see docs/performance.md).

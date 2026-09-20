@@ -12,9 +12,9 @@
 set -euo pipefail
 
 # ---- Pinned upstream (DO NOT loosen) -----------------------------------------
-OPENWRT_VERSION="25.12.2"
+OPENWRT_VERSION="25.12.5"
 OPENWRT_TAG="v${OPENWRT_VERSION}"
-OPENWRT_COMMIT="d266501ad6188cce279a487b1ce61f4f327cd496"
+OPENWRT_COMMIT="f0a60eee2fe051741c643ea6118718aae1ef17fb"
 OPENWRT_REPO="https://github.com/openwrt/openwrt.git"
 # KERNEL_PATCHVER of ramips at the pinned tag (target/linux/ramips/Makefile).
 # Only used to route patches/kernel/*.patch to the right directory.
